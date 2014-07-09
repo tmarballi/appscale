@@ -222,11 +222,11 @@ installrubysoap()
     mkdir -pv ${APPSCALE_HOME}/downloads
     cd ${APPSCALE_HOME}/downloads
     wget --no-check-certificate https://github.com/AppScale/soap4r-spox/tarball/1.5.8.4
-    tar -xzf spox-soap4r-spox-1.5.8.4-0-g345a6cb.tar.gz
-    cd spox-soap4r-spox-345a6cb/
+    tar -xzf 1.5.8.4
+    cd AppScale-soap4r-spox-345a6cb/
     ruby setup.rb all
     cd ..
-    rm -fr spox-soap4r*
+    rm -fr AppScale-soap4r*
 }
 
 installgems()
