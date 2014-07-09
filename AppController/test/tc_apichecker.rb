@@ -1,3 +1,6 @@
+require 'rubygems'
+gem 'test-unit'
+require 'test/unit'
 
 $:.unshift File.join(File.dirname(__FILE__), "..", "lib")
 require 'apichecker'
@@ -7,8 +10,6 @@ require 'helperfunctions'
 require 'nginx'
 
 require 'flexmock/test_unit'
-require 'rubygems'
-
 
 class TestAPIChecker < Test::Unit::TestCase
   def test_start_app_failure

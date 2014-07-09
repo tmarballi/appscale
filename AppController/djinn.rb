@@ -41,8 +41,6 @@ require 'apichecker'
 require 'user_app_client'
 require 'zkinterface'
 
-NO_OUTPUT = false
-
 # Path to the appscale-tools installation.
 APPSCALE_TOOLS_HOME = "/usr/local/appscale-tools/"
 
@@ -788,7 +786,7 @@ class Djinn
 
     if djinn_locations.class != String
       msg = "Error: djinn_locations wasn't a String, but was a " +
-        djinn_locations.class.join
+        djinn_locations.class.to_s
       Djinn.log_error(msg)
       return msg
     end
@@ -1107,7 +1105,7 @@ class Djinn
       else
         db_master = get_db_master()
         HelperFunctions.run_remote_command(db_master.private_ip,
-          run_groomer_command, db_master.ssh_key, NO_OUTPUT)
+          run_groomer_command, db_master.ssh_key, false)
       end
     }
 
@@ -3693,7 +3691,7 @@ class Djinn
     cloud_private_key = "#{cloud_keys_dir}/mykey.pem"
     cloud_cert = "#{cloud_keys_dir}/mycert.pem"
 
-    HelperFunctions.run_remote_command(ip, make_dir, ssh_key, NO_OUTPUT)
+    HelperFunctions.run_remote_command(ip, make_dir, ssh_key, false)
     HelperFunctions.scp_file(ssh_key, ssh_key, ip, ssh_key)
     HelperFunctions.scp_file(cloud_private_key, cloud_private_key, ip, ssh_key)
     HelperFunctions.scp_file(cloud_cert, cloud_cert, ip, ssh_key)
@@ -4096,7 +4094,7 @@ HOSTS
     # remove any possible appcontroller state that may not have been
     # properly removed in non-cloud runs
     remove_state = "rm -rf #{CONFIG_FILE_LOCATION}/appcontroller-state.json"
-    HelperFunctions.run_remote_command(ip, remove_state, ssh_key, NO_OUTPUT)
+    HelperFunctions.run_remote_command(ip, remove_state, ssh_key, false)
 
     MonitInterface.start_monit(ip, ssh_key)
     Kernel.sleep(1)

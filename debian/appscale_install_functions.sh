@@ -243,6 +243,8 @@ installgems()
     gem install -v=0.8.3 httparty ${GEMOPT}
     # This is for the unit testing framework.
     gem install -v=1.0.4 flexmock ${GEMOPT}
+    
+    gem install test-unit -v 1.2.3
 }
 
 postinstallnginx()

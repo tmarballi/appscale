@@ -1445,7 +1445,7 @@ module HelperFunctions
     elsif File.exists?(appengine_web_xml_file)
       return_val = "false"
       xml = HelperFunctions.read_file(appengine_web_xml_file, true)
-      match_data = xml.scan(/<threadsafe>(.*)<\/threadsafe>/)[0]
+      match_data = xml.scan(/<threadsafe>(.*)<\/threadsafe>/)
       match_data.each { |key_and_val|
         if key_and_val.length == 1
           return_val = key_and_val[0]
