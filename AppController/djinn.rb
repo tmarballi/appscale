@@ -2878,7 +2878,6 @@ class Djinn
         http = Net::HTTP.new(url.host, url.port)
         http.use_ssl = true
         http.verify_mode = OpenSSL::SSL::VERIFY_NONE
-        Djinn.log_info("HOST: #{url.host} PORT: #{url.port}")
         response = http.post(url.path, JSON.dump(instance_info),
           {'Content-Type'=>'application/json'})
         Djinn.log_debug("Done sending instance info to AppDashboard!")
@@ -4574,7 +4573,7 @@ HOSTS
     time_requests_were_seen = 0
 
     # Now see how many requests came in for our app and how many are enqueued
-    monitoring_info = Djinn.log_run("echo \"show info;show stat\" | socat stdio unix-connect:/etc/haproxy/stats | grep #{app
+    monitoring_info = Djinn.log_run("echo \"show info;show stat\" | socat stdio unix-connect:/etc/haproxy/stats | grep #{app_name}")
 
     if monitoring_info.empty?
       Djinn.log_warn("Didn't see any monitoring info - #{app_name} may not " +
