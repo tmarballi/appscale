@@ -74,10 +74,10 @@ class ApiChecker
     app_location = "/var/apps/#{app}/app"
     Djinn.log_run("mkdir -p #{app_location}")
     Djinn.log_run("cp -r #{APPSCALE_HOME}/AppServer/demos/apichecker/* #{app_location}")
-    HelperFunctions.setup_app(app, untar=false)
+    HelperFunctions.setup_app(app, false)
 
     apichecker_main_code = "#{app_location}/apichecker.py"
-    file_w_o_secret = HelperFunctions.read_file(apichecker_main_code)
+    file_w_o_secret = HelperFunctions.read_file(apichecker_main_code, true)
     file_w_secret = file_w_o_secret.gsub("PLACE SECRET HERE", @@secret)
     HelperFunctions.write_file(apichecker_main_code, file_w_secret)
 

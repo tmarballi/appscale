@@ -90,18 +90,13 @@ setupntp()
 
 installPIL()
 {
-    pip uninstall -y PIL
+    pip uninstall -y PIL || true
     pip_wrapper pillow
 }
 
 installlxml()
 {
     pip_wrapper lxml
-}
-
-installxmpppy()
-{
-    pip_wrapper xmpppy
 }
 
 setulimits()
@@ -222,6 +217,18 @@ postinstallhaproxy()
     update-rc.d -f haproxy remove || true
 }
 
+installrubysoap()
+{
+    mkdir -pv ${APPSCALE_HOME}/downloads
+    cd ${APPSCALE_HOME}/downloads
+    wget --no-check-certificate https://github.com/AppScale/soap4r-spox/tarball/1.5.8.4
+    tar -xzf spox-soap4r-spox-1.5.8.4-0-g345a6cb.tar.gz
+    cd spox-soap4r-spox-345a6cb/
+    ruby setup.rb all
+    cd ..
+    rm -fr spox-soap4r*
+}
+
 installgems()
 {
     GEMOPT="--no-rdoc --no-ri"
@@ -236,7 +243,6 @@ installgems()
     gem install -v=0.8.3 httparty ${GEMOPT}
     # This is for the unit testing framework.
     gem install -v=1.0.4 flexmock ${GEMOPT}
-    gem install -v=1.0.0 rcov ${GEMOPT}
 }
 
 postinstallnginx()
@@ -337,11 +343,11 @@ installpythonmemcache()
 
 installzookeeper()
 {
-  ZK_REPO_PKG=cdh4-repository_1.0_all.deb
-  wget -O  /tmp/${ZK_REPO_PKG} http://archive.cloudera.com/cdh4/one-click-install/precise/amd64/${ZK_REPO_PKG}
-  dpkg -i /tmp/${ZK_REPO_PKG}
-  apt-get update 
-  apt-get install -y zookeeper-server 
+  #ZK_REPO_PKG=cdh4-repository_1.0_all.deb
+  #wget -O  /tmp/${ZK_REPO_PKG} http://archive.cloudera.com/cdh4/one-click-install/trusty/amd64/${ZK_REPO_PKG}
+  #dpkg -i /tmp/${ZK_REPO_PKG}
+  #apt-get update 
+  apt-get install -y zookeeper zookeeperd
 
   pip_wrapper kazoo
 }
@@ -355,8 +361,8 @@ postinstallzookeeper()
 {
     # Need conf/environment to stop service.
     cp -v /etc/zookeeper/conf_example/* /etc/zookeeper/conf || true
-    service zookeeper-server stop || true
-    update-rc.d -f zookeeper-server remove || true
+    service zookeeper stop || true
+    update-rc.d -f zookeeper remove || true
 }
 
 keygen()

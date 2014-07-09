@@ -23,13 +23,13 @@ case "$1" in
         installappscaleprofile
         . /etc/profile.d/appscale.sh
         installgems
+        installrubysoap
         postinstallhaproxy
         postinstallnginx
         portinstallmonit
         installPIL
         installpythonmemcache
         installlxml
-        installxmpppy
         installappserverjava
         installjavajdk
         installappserverjava
@@ -69,13 +69,13 @@ case "$1" in
         installappscaleprofile
         . /etc/profile.d/appscale.sh
         installgems
+        installrubysoap
         postinstallhaproxy
         postinstallnginx
         portinstallmonit
         installPIL
         installpythonmemcache
         installlxml
-        installxmpppy
         installjavajdk
         installappserverjava
         installthrift

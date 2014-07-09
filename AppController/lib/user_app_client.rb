@@ -42,10 +42,10 @@ class UserAppClient
     @conn.add_method("add_instance", "appname", "host", "port", "secret")
     @conn.add_method("get_all_apps", "secret")
     @conn.add_method("get_all_users", "secret")
+    @conn.options["protocol.http.ssl_config.verify_mode"] = nil
   end
 
   def make_call(timeout, retry_on_except, callr)
-    result = ""
     Djinn.log_debug("Calling #{callr} on an UserAppServer at #{@ip}")
     begin
       Timeout::timeout(timeout) do

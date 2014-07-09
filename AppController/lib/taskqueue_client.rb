@@ -9,7 +9,7 @@ require 'timeout'
 # Number of seconds to wait before timing out when doing a remote call.
 # This number should be higher than the maximum time required for remote calls
 # to properly execute (i.e., starting a process may take more than 2 minutes).
-MAX_TIME_OUT = 180
+MAX_TQ_TIME_OUT = 180
 
 # This is transitional glue code as we shift from ruby to python. The 
 # Taskqueue server is written in python and hence we use a REST client 
@@ -27,7 +27,7 @@ class TaskQueueClient
 
   # Initialization function for TaskQueueClient
   def initialize()
-    @host = HelperFunctions.read_file(NEAREST_TQ_LOCATION)
+    @host = HelperFunctions.read_file(NEAREST_TQ_LOCATION, true)
   end
 
   # Make a REST call out to the TaskQueue Server. 
@@ -39,7 +39,6 @@ class TaskQueueClient
   # Returns:
   #   The result of the remote call.
   def make_call(timeout, retry_on_except, callr)
-    result = ""
     Djinn.log_debug("Calling the TaskQueue Server: #{callr}")
     begin
       Timeout::timeout(timeout) do
@@ -57,7 +56,7 @@ class TaskQueueClient
         trace = except.backtrace.join("\n")
         Djinn.log_warn("We saw an unexpected error of the type #{except.class} with the following message:\n#{except}, with trace: #{trace}")
       end 
-   rescue Exception => except
+    rescue Exception => except
       if except.class == Interrupt
         HelperFunctions.log_and_crash("Saw an Interrupt when talking to the" +
           " TaskQueue server.")
@@ -68,21 +67,22 @@ class TaskQueueClient
     end
   end
  
-   # Wrapper for REST calls to the TaskQueue Server to start a
-   # taskqueue worker on a taskqueue node.
-   #
-   # Args:
-   #   app_name: Name of the application.
-   # Returns:
-   #   JSON response.
-   def start_worker(app_name)
+  # Wrapper for REST calls to the TaskQueue Server to start a
+  # taskqueue worker on a taskqueue node.
+  #
+  # Args:
+  #   app_name: Name of the application.
+  # Returns:
+  #   JSON response.
+  def start_worker(app_name)
     config = {'app_id' => app_name, 'command' => 'update'}
     json_config = JSON.dump(config)
     response = nil
      
-    make_call(MAX_TIME_OUT, false, "start_worker"){
+    make_call(MAX_TQ_TIME_OUT, false, "start_worker"){
       url = URI.parse('http://' + @host + ":#{SERVER_PORT}/startworker")
       http = Net::HTTP.new(url.host, url.port)
+      http.verify_mode = OpenSSL::SSL::VERIFY_NONE if http.use_ssl?
       response = http.post(url.path, json_config, {'Content-Type'=>'application/json'})
     }
     if response.nil?
@@ -92,21 +92,22 @@ class TaskQueueClient
     return JSON.load(response.body)
   end
 
-   # Wrapper for REST calls to the TaskQueue Server to stop a
-   # taskqueue worker on a taskqueue node.
-   #
-   # Args:
-   #   app_name: Name of the application.
-   # Returns:
-   #   JSON response.
-   def stop_worker(app_name)
+  # Wrapper for REST calls to the TaskQueue Server to stop a
+  # taskqueue worker on a taskqueue node.
+  #
+  # Args:
+  #   app_name: Name of the application.
+  # Returns:
+  #   JSON response.
+  def stop_worker(app_name)
     config = {'app_id' => app_name, 
               'command' => 'update'}
     json_config = JSON.dump(config)
     response = nil
-    make_call(MAX_TIME_OUT, false, "stop_worker"){
+    make_call(MAX_TQ_TIME_OUT, false, "stop_worker"){
       url = URI.parse('http://' + @host + ":#{SERVER_PORT}/stopworker")
       http = Net::HTTP.new(url.host, url.port)
+      http.verify_mode = OpenSSL::SSL::VERIFY_NONE if http.use_ssl?
       response = http.post(url.path, json_config, {'Content-Type'=>'application/json'})
     }
     if response.nil?
@@ -115,5 +116,4 @@ class TaskQueueClient
 
     return JSON.load(response.body)
   end
-
 end

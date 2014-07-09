@@ -57,7 +57,8 @@ module DatastoreServer
           "--no_encryption --type #{table} -z #{zklocations}"
       # stop command doesn't work, relies on terminate.rb
       stop_cmd = "/usr/bin/pkill -9 datastore_server"
-      MonitInterface.start(:datastore_server, start_cmd, stop_cmd, port, env_vars)
+      MonitInterface.start(:datastore_server, start_cmd, stop_cmd, port, env_vars,
+        nil, start_cmd)
     }
   end
 

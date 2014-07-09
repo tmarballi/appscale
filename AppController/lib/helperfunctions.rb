@@ -147,7 +147,7 @@ module HelperFunctions
   end
 
 
-  def self.read_file(location, chomp=true)
+  def self.read_file(location, chomp)
     file = File.open(location) { |f| f.read }
     if chomp
       return file.chomp
@@ -160,14 +160,14 @@ module HelperFunctions
   # Reads the given file, which is assumed to be a JSON-loadable object,
   # and returns that JSON back to the caller.
   def self.read_json_file(location)
-    data = self.read_file(location)
+    data = self.read_file(location, true)
     return JSON.load(data)
   end
 
 
   # Returns a random string composed of alphanumeric characters, as long
   # as the user requests.
-  def self.get_random_alphanumeric(length=10)
+  def self.get_random_alphanumeric(length)
     random = ""
     possible = "0123456789abcdefghijklmnopqrstuvxwyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
     possibleLength = possible.length
@@ -333,7 +333,7 @@ module HelperFunctions
     local_file_loc = File.expand_path(local_file_loc)
     retval_file = "#{APPSCALE_CONFIG_DIR}/retval-#{Kernel.rand()}"
     cmd = "scp -i #{private_key_loc} -o StrictHostkeyChecking=no 2>&1 #{local_file_loc} root@#{target_ip}:#{remote_file_loc}; echo $? > #{retval_file}"
-    scp_result = self.shell(cmd)
+    self.shell(cmd)
 
     loop {
       break if File.exists?(retval_file)
@@ -347,7 +347,7 @@ module HelperFunctions
       break if retval == "0"
       Djinn.log_debug("\n\n[#{cmd}] returned #{retval} instead of 0 as expected. Will try to copy again momentarily...")
       fails += 1
-      if fails >= 5:
+      if fails >= 5
         raise AppScaleSCPException.new("Failed to copy over #{local_file_loc} to #{remote_file_loc} to #{target_ip} with private key #{private_key_loc}")
       end
       Kernel.sleep(2)
@@ -374,7 +374,7 @@ module HelperFunctions
     image_info = `ec2-describe-images`
     
     self.log_and_crash("ec2 tools can't find appscale image") unless image_info.include?("appscale")
-    image_id = image_info.scan(/([a|e]mi-[0-9a-zA-Z]+)\sappscale/).flatten.to_s
+    image_id = image_info.scan(/([a|e]mi-[0-9a-zA-Z]+)\sappscale/).flatten[0]
     
     return image_id
   end
@@ -394,7 +394,7 @@ module HelperFunctions
   end
   
   def self.get_secret(filename="/etc/appscale/secret.key")
-    return self.read_file(File.expand_path(filename), chomp=true)
+    return self.read_file(File.expand_path(filename), true)
   end
   
   # Examines the given tar.gz file to see if it has an App Engine configuration
@@ -417,7 +417,8 @@ module HelperFunctions
     end
   end
 
-  def self.setup_app(app_name, untar=true)
+  def self.setup_app(app_name, untar)
+    Djinn.log_info("SETTING UP APP #{app_name} untar: #{untar}!")
     meta_dir = "/var/apps/#{app_name}"
     tar_dir = "#{meta_dir}/app/"
     tar_path = "/opt/appscale/apps/#{app_name}.tar.gz"
@@ -617,7 +618,7 @@ module HelperFunctions
 
     options.each_pair { |k, v|
       next unless k =~ /\ACLOUD/
-      env_key = k.scan(/\ACLOUD_(.*)\Z/).flatten.to_s
+      env_key = k.scan(/\ACLOUD_(.*)\Z/).flatten[0]
       ENV[env_key] = v
     }
 
@@ -901,8 +902,7 @@ module HelperFunctions
     usage = {}
     usage['cpu'] = 0.0
     usage['mem'] = 0.0
-
-    top_results.each { |line|
+    top_results.each_line { |line|
       cpu_and_mem_usage = line.split()
       # Skip any lines that don't list the CPU and memory for a process.
       next if cpu_and_mem_usage.length != 12
@@ -913,8 +913,7 @@ module HelperFunctions
     }
 
     usage['cpu'] /= self.get_num_cpus()
-    usage['disk'] = Integer(`df /`.scan(/(\d+)%/).flatten.to_s)
-
+    usage['disk'] = Integer(`df / --output="pcent" | tail -n 1 | cut -d "%" -f 1`)
     return usage
   end
 
@@ -1023,7 +1022,7 @@ module HelperFunctions
 
     begin
       tree = YAML.load_file(File.join(untar_dir,"app.yaml"))
-    rescue Errno::ENOENT => e
+    rescue Errno::ENOENT
       return self.parse_java_static_data(app_name)
     end
 
@@ -1151,7 +1150,7 @@ module HelperFunctions
       next if filename.end_with?(".jsp")
       next if filename.include?("WEB-INF")
       next if File.directory?(filename)
-      relative_path = filename.scan(/#{war_dir}\/(.*)/).flatten.to_s
+      relative_path = filename.scan(/#{war_dir}\/(.*)/).flatten[0]
       Djinn.log_debug("Copying static file #{filename} to cache location #{File.join(cache_path, relative_path)}")
       cache_file_location = File.join(cache_path, relative_path)
       FileUtils.mkdir_p(File.dirname(cache_file_location))
@@ -1184,7 +1183,7 @@ module HelperFunctions
 
     begin
       tree = YAML.load_file(File.join(untar_dir,"app.yaml"))
-    rescue Errno::ENOENT => e
+    rescue Errno::ENOENT
       Djinn.log_info("No YAML for static data. Looking for an XML file.")
       return secure_handlers
     end
@@ -1408,13 +1407,14 @@ module HelperFunctions
       return tree['env_variables'] || {}
     elsif File.exists?(appengine_web_xml_file)
       env_vars = {}
-      xml = HelperFunctions.read_file(appengine_web_xml_file)
+      xml = HelperFunctions.read_file(appengine_web_xml_file, true)
       match_data = xml.scan(/<env-var name="(.*)" value="(.*)" \/>/)
       match_data.each { |key_and_val|
         if key_and_val.length == 2
           env_vars[key_and_val[0]] = key_and_val[1]
         end
       }
+      Djinn.log_info("ENV VARS: #{env_vars}")
       return env_vars
     else
       raise AppScaleException.new("Couldn't find an app.yaml or " +
@@ -1444,8 +1444,8 @@ module HelperFunctions
       return tree['threadsafe'] == true
     elsif File.exists?(appengine_web_xml_file)
       return_val = "false"
-      xml = HelperFunctions.read_file(appengine_web_xml_file)
-      match_data = xml.scan(/<threadsafe>(.*)<\/threadsafe>/)
+      xml = HelperFunctions.read_file(appengine_web_xml_file, true)
+      match_data = xml.scan(/<threadsafe>(.*)<\/threadsafe>/)[0]
       match_data.each { |key_and_val|
         if key_and_val.length == 1
           return_val = key_and_val[0]
@@ -1482,7 +1482,7 @@ module HelperFunctions
   def self.alter_etc_resolv()
     self.shell("cp #{RESOLV_CONF} #{RESOLV_CONF}.bk")
 
-    contents = self.read_file(RESOLV_CONF, chomp=false)
+    contents = self.read_file(RESOLV_CONF, false)
     new_contents = ""
     contents.split("\n").each { |line|
       new_contents << line if !contents.include?("nameserver")
