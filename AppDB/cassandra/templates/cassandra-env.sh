@@ -173,7 +173,7 @@ JMX_PORT="APPSCALE-JMX-PORT"
 JVM_OPTS="$JVM_OPTS -ea"
 
 # add the jamm javaagent
-JVM_OPTS="$JVM_OPTS -javaagent:/root/appscale/AppDB/cassandra/cassandra/lib/jamm-0.2.6.jar"
+JVM_OPTS="$JVM_OPTS -javaagent:/root/appscale/AppDB/cassandra/cassandra/lib/jamm-0.2.8.jar"
 
 # some JVMs will fill up their heap when accessed via JMX, see CASSANDRA-6541
 JVM_OPTS="$JVM_OPTS -XX:+CMSClassUnloadingEnabled"
