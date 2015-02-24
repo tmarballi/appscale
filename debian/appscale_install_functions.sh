@@ -15,7 +15,7 @@ if [ -z "$APPSCALE_PACKAGE_MIRROR" ]; then
     export APPSCALE_PACKAGE_MIRROR=http://s3.amazonaws.com/appscale-build
 fi
 
-export APPSCALE_VERSION=2.1.0
+export APPSCALE_VERSION=2.2.0
 
 pip_wrapper () 
 {
@@ -253,16 +253,23 @@ installgems()
     gem install -v=1.0.0 rcov ${GEMOPT}
 }
 
+installphp54()
+{
+    # In Precise we have a too old version of php. We need at least 5.4.
+    if [ "$DIST" = "precise" ]; then
+        add-apt-repository -y ppa:ondrej/php5-oldstable
+        apt-get update
+        # We need to pull also php5-cgi to ensure apache2 won't be pulled
+        # in.
+        apt-get install -y php5-cgi php5
+    fi
+}
+
 postinstallnginx()
 {
     cp -v ${APPSCALE_HOME}/AppDashboard/setup/load-balancer.conf /etc/nginx/sites-enabled/
     rm -fv /etc/nginx/sites-enabled/default
     chmod +x /root
-
-    # apache2 is a dependency pulled in by php5: make sure it doesn't use
-    # port 80.
-    service apache2 stop || true
-    update-rc.d -f apache2 remove || true
 }
 
 portinstallmonit()
@@ -272,6 +279,18 @@ portinstallmonit()
     chmod 0700 /etc/monit/monitrc
     service monit stop
     update-rc.d -f monit remove
+}
+
+installsolr()
+{
+    SOLR_VER=4.10.2
+    mkdir -p ${APPSCALE_HOME}/SearchService/solr
+    cd ${APPSCALE_HOME}/SearchService/solr
+    rm -rfv solr
+    wget $APPSCALE_PACKAGE_MIRROR/solr-${SOLR_VER}.tgz
+    tar zxvf solr-${SOLR_VER}.tgz
+    mv -v solr-${SOLR_VER} solr
+    rm -fv solr-${SOLR_VER}.tgz
 }
 
 installcassandra()
@@ -296,6 +315,9 @@ installcassandra()
     pip_wrapper  setuptools
     pip_wrapper  pycassa
     pip_wrapper  thrift
+
+    cd ${APPSCALE_HOME}/AppDB/cassandra/cassandra/lib
+    wget $APPSCALE_PACKAGE_MIRROR/jamm-0.2.2.jar
 }
 
 postinstallcassandra()
