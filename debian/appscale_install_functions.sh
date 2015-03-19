@@ -15,28 +15,28 @@ if [ -z "$APPSCALE_PACKAGE_MIRROR" ]; then
     export APPSCALE_PACKAGE_MIRROR=http://s3.amazonaws.com/appscale-build
 fi
 
-export APPSCALE_VERSION=2.0.0
+export APPSCALE_VERSION=2.2.0
 
 pip_wrapper () 
 {
-  # We have seen quite a few network/DNS issues lately, so much so that
-  # it takes a couple of tries to install packages with pip. This
-  # wrapper ensure that we are a bit more persitent.
-  if [ -n "$1" ] ; then
-    for x in 1 2 3 4 5 ; do
-      if pip install --upgrade $1 ; then
-        return
-      else
-        echo "Failed to install $1: retrying ..."
-        sleep $x
-      fi
-    done
-    echo "Failed to install $1: giving up."
-    exit 1
-  else
-    echo "Need an argument for pip!"
-    exit 1
-  fi
+    # We have seen quite a few network/DNS issues lately, so much so that
+    # it takes a couple of tries to install packages with pip. This
+    # wrapper ensure that we are a bit more persitent.
+    if [ -n "$1" ] ; then
+        for x in {1..5} ; do
+            if pip install --upgrade $1 ; then
+                return
+            else
+                echo "Failed to install $1: retrying ..."
+                sleep $x
+            fi
+        done
+        echo "Failed to install $1: giving up."
+        exit 1
+    else
+        echo "Need an argument for pip!"
+        exit 1
+    fi
 }
 
 increaseconnections()
@@ -82,9 +82,18 @@ setupntp()
     echo -e "\nmaxpoll 6" >> /etc/ntp.conf
 
     # This ensure that we synced first, to allow ntpd to stay
-    # synchronized.
+    # synchronized. We have seen temporary failures in reaching out to the
+    # ntp pool, so we'll make sure we try few times.
     service ntp stop
-    ntpdate pool.ntp.org
+    for x in {1..5} ; do
+        if ntpdate pool.ntp.org ; then
+            break
+        fi
+        sleep $x
+    done
+    if [ $x -gt 5 ]; then
+        echo "Cannot sync clock: you may have issues!"
+    fi
     service ntp start
 }
 
@@ -157,6 +166,11 @@ JAVA_HOME: /usr/lib/jvm/java-7-openjdk-amd64
 EOF
     mkdir -pv /var/log/appscale
     mkdir -pv /var/appscale/
+
+    # This puts in place the logrotate rules.
+    if [ -d /etc/logrotate.d/ ]; then
+        cp ${APPSCALE_HOME}/scripts/appscale-logotate.conf /etc/logrotate.d/appscale
+    fi
 }
 
 installthrift()
@@ -247,16 +261,23 @@ installgems()
     gem install test-unit -v 1.2.3
 }
 
+installphp54()
+{
+    # In Precise we have a too old version of php. We need at least 5.4.
+    if [ "$DIST" = "precise" ]; then
+        add-apt-repository -y ppa:ondrej/php5-oldstable
+        apt-get update
+        # We need to pull also php5-cgi to ensure apache2 won't be pulled
+        # in.
+        apt-get install -y php5-cgi php5
+    fi
+}
+
 postinstallnginx()
 {
     cp -v ${APPSCALE_HOME}/AppDashboard/setup/load-balancer.conf /etc/nginx/sites-enabled/
     rm -fv /etc/nginx/sites-enabled/default
     chmod +x /root
-
-    # apache2 is a dependency pulled in by php5: make sure it doesn't use
-    # port 80.
-    service apache2 stop || true
-    update-rc.d -f apache2 remove || true
 }
 
 portinstallmonit()
@@ -266,6 +287,18 @@ portinstallmonit()
     chmod 0700 /etc/monit/monitrc
     service monit stop
     update-rc.d -f monit remove
+}
+
+installsolr()
+{
+    SOLR_VER=4.10.2
+    mkdir -p ${APPSCALE_HOME}/SearchService/solr
+    cd ${APPSCALE_HOME}/SearchService/solr
+    rm -rfv solr
+    wget $APPSCALE_PACKAGE_MIRROR/solr-${SOLR_VER}.tgz
+    tar zxvf solr-${SOLR_VER}.tgz
+    mv -v solr-${SOLR_VER} solr
+    rm -fv solr-${SOLR_VER}.tgz
 }
 
 installcassandra()
@@ -377,7 +410,7 @@ keygen()
 
 installcelery()
 {
-    pip_wrapper Celery==3.0.24
+    pip_wrapper Celery
     pip_wrapper Flower
 }
 

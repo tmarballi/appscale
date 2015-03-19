@@ -790,6 +790,7 @@ _WHITE_LIST_C_MODULES = [
     '_sha512',  # Python2.5 compatibility
     '_sha',  # Python2.5 compatibility
     'signal',
+    '_socket',
     '_sre',
     'strop',
     '_struct',
@@ -805,6 +806,7 @@ _WHITE_LIST_C_MODULES = [
     '_weakref',
     'zipimport',
     'zlib',
+    'future_builtins',
 ]
 
 

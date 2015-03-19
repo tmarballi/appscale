@@ -52,6 +52,11 @@ module Nginx
 
   CHANNELSERVER_PORT = 5280
 
+  # User/apps soap server SSL port.
+  UASERVER_SSL_PORT = 4343
+
+  # User/apps soap server bind port. 
+  UASERVER_NON_SSL_PORT = 4342
 
   def self.start()
     # Nginx runs both a 'master process' and one or more 'worker process'es, so
@@ -189,7 +194,7 @@ server {
     error_page 404 = /404.html;
     set $cache_dir /var/apps/#{app_name}/cache;
 
-    #If they come here using HTTPS, bounce them to the correct scheme
+    # If they come here using HTTPS, bounce them to the correct scheme.
     error_page 400 http://$host:$server_port$request_uri;
 
     #{always_secure_locations}
@@ -214,11 +219,12 @@ server {
     listen #{https_port};
     server_name #{my_public_ip}-#{app_name}-ssl;
     ssl on;
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;  # don't use SSLv3 ref: POODLE
     ssl_certificate /etc/nginx/mycert.pem;
     ssl_certificate_key /etc/nginx/mykey.pem;
     ignore_invalid_headers off;
 
-    #If they come here using HTTP, bounce them to the correct scheme
+    # If they come here using HTTP, bounce them to the correct scheme.
     error_page 400 https://$host:$server_port$request_uri;
     error_page 497 https://$host:$server_port$request_uri;
  
@@ -365,7 +371,7 @@ server {
     error_page 404 = /404.html;
     set $cache_dir /var/apps/#{app_name}/cache;
 
-    #If they come here using HTTPS, bounce them to the correct scheme
+    # If they come here using HTTPS, bounce them to the correct scheme.
     error_page 400 http://$host:$server_port$request_uri;
 
     #{always_secure_locations}
@@ -392,7 +398,7 @@ server {
     #error_log /dev/null crit;
     ignore_invalid_headers off;
 
-    #If they come here using HTTPS, bounce them to the correct scheme
+    # If they come here using HTTPS, bounce them to the correct scheme.
     error_page 400 http://$host:$server_port$request_uri;
 
     rewrite_log off;
@@ -415,10 +421,11 @@ server {
     listen #{https_port};
     server_name #{my_public_ip}-#{app_name}-ssl;
     ssl on;
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;  # don't use SSLv3 ref: POODLE
     ssl_certificate #{NGINX_PATH}/mycert.pem;
     ssl_certificate_key #{NGINX_PATH}/mykey.pem;
 
-    #If they come here using HTTP, bounce them to the correct scheme
+    # If they come here using HTTP, bounce them to the correct scheme.
     error_page 400 https://$host:$server_port$request_uri;
     error_page 497 https://$host:$server_port$request_uri;
 
@@ -495,15 +502,20 @@ CONFIG
   end
 
   # Create the configuration file for the datastore_server
-  def self.create_datastore_server_config(my_ip, proxy_port)
+  def self.create_datastore_server_config(all_private_ips, proxy_port)
     config = <<CONFIG
 upstream #{DatastoreServer::NAME} {
-    server #{my_ip}:#{proxy_port};
+CONFIG
+    all_private_ips.each { |ip|
+      config += <<CONFIG 
+    server #{ip}:#{proxy_port};
+CONFIG
+    }
+    config += <<CONFIG
 }
     
 server {
     listen #{DatastoreServer::LISTEN_PORT_NO_SSL};
-    server_name #{my_ip};
     root /root/appscale/AppDB/;
     # Uncomment these lines to enable logging, and comment out the following two
     #access_log  /var/log/nginx/datastore_server.access.log upstream;
@@ -522,9 +534,10 @@ server {
       proxy_set_header  X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_set_header Host $http_host;
       proxy_redirect off;
+      proxy_next_upstream     error timeout invalid_header http_500;
       proxy_pass http://#{DatastoreServer::NAME};
       client_max_body_size 30M;
-      proxy_connect_timeout 600;
+      proxy_connect_timeout 5;
       client_body_timeout 600;
       proxy_read_timeout 600;
     }
@@ -534,10 +547,11 @@ server {
 server {
     listen #{DatastoreServer::LISTEN_PORT_WITH_SSL};
     ssl on;
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;  # don't use SSLv3 ref: POODLE
     ssl_certificate #{NGINX_PATH}/mycert.pem;
     ssl_certificate_key #{NGINX_PATH}/mykey.pem;
 
-    #If they come here using HTTP, bounce them to the correct scheme
+    # If they come here using HTTP, bounce them to the correct scheme.
     error_page 400 https://$host:$server_port$request_uri;
     error_page 497 https://$host:$server_port$request_uri;
 
@@ -559,6 +573,8 @@ server {
 
       client_body_timeout 600;
       proxy_read_timeout 600;
+      proxy_next_upstream     error timeout invalid_header http_500;
+      proxy_connect_timeout 5;
       #Increase file size so larger applications can be uploaded
       client_max_body_size 30M;
       # go to proxy
@@ -573,6 +589,63 @@ CONFIG
 
   end
 
+  # Creates an Nginx configuration file for the Users/Apps soap server.
+  # 
+  # Args:
+  #   all_private_ips: A list of strings, the IPs on which the datastore is running. 
+  def self.create_uaserver_config(all_private_ips)
+    config = <<CONFIG
+upstream uaserver {
+CONFIG
+    all_private_ips.each { |ip|
+      config += <<CONFIG
+    server #{ip}:#{UASERVER_NON_SSL_PORT};
+CONFIG
+    }
+    config += <<CONFIG
+}
+ 
+server {
+    listen #{UASERVER_SSL_PORT};
+    ssl on;
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;  # don't use SSLv3 ref: POODLE
+    ssl_certificate #{NGINX_PATH}/mycert.pem;
+    ssl_certificate_key #{NGINX_PATH}/mykey.pem;
+
+    # If they come here using HTTP, bounce them to the correct scheme.
+    error_page 400 https://$host:$server_port$request_uri;
+    error_page 497 https://$host:$server_port$request_uri;
+
+    root /root/appscale/AppDB/public;
+    #access_log  /var/log/nginx/datastore_server_encrypt.access.log upstream;
+    #error_log  /var/log/nginx/datastore_server_encrypt.error.log;
+    access_log off;
+    error_log  /dev/null crit;
+    ignore_invalid_headers off;
+
+    rewrite_log off;
+    error_page 502 /502.html;
+
+    location / {
+      proxy_set_header  X-Real-IP  $remote_addr;
+      proxy_set_header  X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header Host $http_host;
+      proxy_redirect off;
+
+      client_body_timeout 600;
+      proxy_read_timeout 600;
+      proxy_next_upstream     error timeout invalid_header http_500;
+      proxy_connect_timeout 5;
+      #Increase file size so larger applications can be uploaded
+      client_max_body_size 30M;
+      # go to proxy
+      proxy_pass http://uaserver;
+    }
+}
+CONFIG
+    config_path = File.join(SITES_ENABLED_PATH, "as_uaserver.#{CONFIG_EXTENSION}")
+    File.open(config_path, "w+") { |dest_file| dest_file.write(config) }
+  end
 
   # A generic function for creating nginx config files used by appscale services
   def self.create_app_config(my_public_ip, my_private_ip, proxy_port, 
@@ -588,7 +661,7 @@ CONFIG
       # redirect all request to ssl port.
       config += <<CONFIG
 server {
-    #If they come here using HTTPS, bounce them to the correct scheme
+    # If they come here using HTTPS, bounce them to the correct scheme.
     error_page 400 http://$host:$server_port$request_uri;
 
 
@@ -598,16 +671,17 @@ server {
 
 server {
  
-    #If they come here using HTTP, bounce them to the correct scheme
+    # If they come here using HTTP, bounce them to the correct scheme.
     error_page 400 https://$host:$server_port$request_uri;
     error_page 497 https://$host:$server_port$request_uri;
 
     listen #{ssl_port};
     ssl on;
+    ssl_protocols  TLSv1 TLSv1.1 TLSv1.2;  # don't use SSLv3 ref: POODLE
     ssl_certificate #{NGINX_PATH}/mycert.pem;
     ssl_certificate_key #{NGINX_PATH}/mykey.pem;
 
-    #If they come here using HTTP, bounce them to the correct scheme
+    # If they come here using HTTP, bounce them to the correct scheme.
     error_page 400 https://$host:$server_port$request_uri;
     error_page 497 https://$host:$server_port$request_uri;
 CONFIG

@@ -40,9 +40,12 @@ module DatastoreServer
   # datastore servers to this value.
   DEFAULT_NUM_SERVERS = 3
 
+  # Datastore server processes to core multipler.
+  MULTIPLIER = 2
+
   # Starts a Datastore Server on this machine. We don't want to monitor
-  # it ourselves, so just tell god to start it and watch it.
-  def self.start(master_ip, db_local_ip, my_ip, table, zklocations)
+  # it ourselves, so just tell monit to start it and watch it.
+  def self.start(master_ip, db_local_ip, my_ip, table)
     datastore_server = self.get_executable_name(table)
     ports = self.get_server_ports(table)
 
@@ -54,7 +57,7 @@ module DatastoreServer
   
     ports.each { |port|
       start_cmd = "/usr/bin/python #{datastore_server} -p #{port} " +
-          "--no_encryption --type #{table} -z #{zklocations}"
+          "--no_encryption --type #{table}"
       # stop command doesn't work, relies on terminate.rb
       stop_cmd = "/usr/bin/pkill -9 datastore_server"
       MonitInterface.start(:datastore_server, start_cmd, stop_cmd, port, env_vars,
@@ -64,7 +67,7 @@ module DatastoreServer
 
 
   # Stops the Datastore Buffer Server running on this machine. Since it's
-  # managed by god, just tell god to shut it down.
+  # managed by monit, just tell monit to shut it down.
   def self.stop(table)
      MonitInterface.stop(:datastore_server)
   end
@@ -72,9 +75,9 @@ module DatastoreServer
 
   # Restarts the Datastore Buffer Server on this machine by doing a hard
   # stop (killing it) and starting it.
-  def self.restart(master_ip, my_ip, table, zklocations)
+  def self.restart(master_ip, my_ip, table)
     self.stop()
-    self.start(master_ip, my_ip, table, zklocations)
+    self.start(master_ip, my_ip, table)
   end
 
 
@@ -85,7 +88,7 @@ module DatastoreServer
     if num_procs == 0
       return DEFAULT_NUM_SERVERS
     else 
-      return num_procs
+      return num_procs * MULTIPLIER
     end
   end
 

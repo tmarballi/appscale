@@ -12,6 +12,7 @@ APPSCALE_BRANCH="master"
 APPSCALE_TOOLS_BRANCH="master"
 FORCE_UPGRADE="N"
 UNIT_TEST="n"
+GIT_TAG=""
 
 usage() {
         echo "Usage: ${0} [--repo <repo>][--tools-repo <repo>][-t]"
@@ -22,6 +23,7 @@ usage() {
         echo "   --tools-repo <repo>      Specify appscale-tools repo (default $APPSCALE_TOOLS_REPO"
         echo "   --tools-branch <branch>  Specify appscale-tools branch (default $APPSCALE_TOOLS_BRANCH)"
         echo "   --force-upgrade          Force upgrade even if some check fails."
+        echo "   --tag <git-tag>          Use specific git tag (ie 2.2.0) or 'last' to use the latest release"
         echo "   -t                       Run unit tests"
         exit 1
 }
@@ -53,6 +55,15 @@ while [ $# -gt 0 ]; do
                         usage
                 fi
                 APPSCALE_BRANCH="${1}"
+                shift
+                continue
+        fi
+        if [ "${1}" = "--tag" ]; then 
+                shift
+                if [ -z "${1}" ]; then
+                        usage
+                fi
+                GIT_TAG="${1}"
                 shift
                 continue
         fi
@@ -99,8 +110,25 @@ echo "Exit now (ctrl-c) if this is incorrect"
 echo
 
 sleep 5
+apt-get update
 apt-get install -y git
-if [ -d appscale ]; then
+if [ ! -d appscale ]; then
+        git clone ${APPSCALE_REPO} --branch ${APPSCALE_BRANCH}
+        git clone ${APPSCALE_TOOLS_REPO} --branch ${APPSCALE_TOOLS_BRANCH}
+
+        # Use tags if we specified it.
+        if [ -n "$GIT_TAG" ]; then
+                if [ "$GIT_TAG" = "last" ]; then
+                        GIT_TAG="$(cd appscale; git tag|tail -n 1)"
+                fi
+                (cd appscale; git checkout "$GIT_TAG")
+                (cd appscale-tools; git checkout "$GIT_TAG")
+        fi
+fi
+
+# Since the last step in appscale_build.sh is to create the certs directory,
+# its existence indicates that appscale has already been installed.
+if [ -d appscale/.appscale/certs ]; then
         APPSCALE_MAJOR="$(sed -n 's/.*\([0-9]\)\+\.\([0-9]\)\+\.[0-9]/\1/gp' appscale/VERSION)"
         APPSCALE_MINOR="$(sed -n 's/.*\([0-9]\)\+\.\([0-9]\)\+\.[0-9]/\2/gp' appscale/VERSION)"
         if [ -z "$APPSCALE_MAJOR" -o -z "$APPSCALE_MINOR" ]; then
@@ -111,15 +139,13 @@ if [ -d appscale ]; then
         echo "Found AppScale version $APPSCALE_MAJOR.$APPSCALE_MINOR: upgrading it."
         # Make sure AppScale is not running.
         MONIT=$(which monit)
-        if [ -n "$MONIT" ]; then
-                if $MONIT summary |grep controller > /dev/null ; then
-                        echo "AppScale is still running: please stop it"
-                        [ "$FORCE_UPGRADE" = "Y" ] || exit 1
-                elif echo $MONIT |grep local > /dev/null ; then
-                        # AppScale is not running but there is a monit
-                        # leftover from the custom install.
-                        $MONIT quit
-                fi
+        if $MONIT summary |grep controller > /dev/null ; then
+                echo "AppScale is still running: please stop it"
+                [ "$FORCE_UPGRADE" = "Y" ] || exit 1
+        elif echo $MONIT |grep local > /dev/null ; then
+                # AppScale is not running but there is a monit
+                # leftover from the custom install.
+                $MONIT quit
         fi
 
         # This sleep is to allow the user to Ctrl-C in case an upgrade is
@@ -143,16 +169,19 @@ if [ -d appscale ]; then
         fi
         (cd appscale; git pull)
         (cd appscale-tools; git pull)
-else
-        git clone ${APPSCALE_REPO} --branch ${APPSCALE_BRANCH}
-        git clone ${APPSCALE_TOOLS_REPO} --branch ${APPSCALE_TOOLS_BRANCH}
 fi
 
-echo "Building AppScale..."
-(cd appscale/debian; bash appscale_build.sh)
+echo -n "Building AppScale..."
+if ! (cd appscale/debian; bash appscale_build.sh) ; then
+        echo "failed!"
+        exit 1
+fi
 
-echo "Building AppScale Tools..." 
-(cd appscale-tools/debian; bash appscale_build.sh)
+echo -n "Building AppScale Tools..." 
+if ! (cd appscale-tools/debian; bash appscale_build.sh) ; then
+        echo "failed!"
+        exit 1
+fi
 
 # Run unit tests if asked.
 if [ "$UNIT_TEST" = "Y" ]; then

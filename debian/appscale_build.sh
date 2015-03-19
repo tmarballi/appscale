@@ -47,9 +47,17 @@ export APPSCALE_HOME_RUNTIME=`pwd`
 # This will install dependencies from control.core and the specific
 # distributions.
 PACKAGES="$(find debian -regex ".*\/control\.[a-z]+\.${DIST}\$" -exec mawk -f debian/package-list.awk {} +) $(find debian -regex ".*\/control\.[a-z]+\$" -exec mawk -f debian/package-list.awk {} +)"
-apt-get install -y --force-yes ${PACKAGES}
-if [ $? -ne 0 ]; then
+
+if ! apt-get install -y --force-yes ${PACKAGES}; then
     echo "Fail to install depending packages for runtime."
+    exit 1
+fi
+
+# This will remove all the conflicts packages.
+PACKAGES="$(find debian -regex ".*\/control\.[a-z]+\.${DIST}\$" -exec mawk -f debian/remove-list.awk {} +) $(find debian -regex ".*\/control\.[a-z]+\$" -exec mawk -f debian/remove-list.awk {} +)"
+
+if ! apt-get remove --purge -y --force-yes ${PACKAGES}; then
+    echo "Fail to remove conflicting packages"
     exit 1
 fi
 
@@ -69,9 +77,7 @@ else
     bash debian/appscale_install.sh all || exit 1
 fi
 
-mkdir -p $APPSCALE_HOME_RUNTIME/.appscale/certs
-
-if [ $? -ne 0 ]; then
+if ! mkdir -p $APPSCALE_HOME_RUNTIME/.appscale/certs; then
     echo "Unable to complete AppScale installation."
     exit 1
 fi

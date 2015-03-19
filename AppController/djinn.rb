@@ -24,20 +24,21 @@ require 'zookeeper'
 $:.unshift File.join(File.dirname(__FILE__), "lib")
 require 'app_controller_client'
 require 'app_manager_client'
-require 'taskqueue_client'
 require 'blobstore'
+require 'cron_helper'
 require 'custom_exceptions'
 require 'datastore_server'
 require 'ejabberd'
 require 'error_app'
-require 'cron_helper'
+require 'groomer_service'
 require 'haproxy'
 require 'helperfunctions'
 require 'infrastructure_manager_client'
 require 'monit_interface'
 require 'nginx'
+require 'search'
 require 'taskqueue'
-require 'apichecker'
+require 'taskqueue_client'
 require 'user_app_client'
 require 'zkinterface'
 
@@ -192,12 +193,6 @@ class Djinn
   attr_accessor :restored
 
 
-  # A Hash that lists the status of each Google App Engine API made available
-  # within AppScale. Keys are the names of the APIs (e.g., memcache), and
-  # values are the statuses of those APIs (e.g., running).
-  attr_accessor :api_status
-
-
   # An Array that lists the CPU, disk, and memory usage of each machine in this
   # AppScale deployment. Used as a cache so that it does not need to be
   # generated in response to AppDashboard requests.
@@ -247,12 +242,6 @@ class Djinn
   attr_accessor :app_upload_reservations
 
 
-  # A Fixnum that indicates the time (in seconds since epoch) when this
-  # AppController last contacted the API Checker for the health of each Google
-  # App Engine app.
-  attr_accessor :last_api_status
-
-
   # The port that the AppController runs on by default
   SERVER_PORT = 17443
 
@@ -275,12 +264,6 @@ class Djinn
   # The location on the local filesystem where AppScale-related configuration
   # files are written to.
   CONFIG_FILE_LOCATION = "/etc/appscale"
-
-
-  # The location on the local filesystem where the AppController writes
-  # information about the status of App Engine APIs, which the AppDashboard
-  # will read and display to users.
-  HEALTH_FILE = "#{CONFIG_FILE_LOCATION}/health.json"
 
 
   # The location on the local filesystem where the AppController periodically
@@ -434,7 +417,7 @@ class Djinn
   # An Array of Strings, where each String is an appid that corresponds to an
   # application that cannot be relocated within AppScale, because system
   # services assume that they run at a specific location.
-  RESERVED_APPS = [AppDashboard::APP_NAME, "apichecker"]
+  RESERVED_APPS = [AppDashboard::APP_NAME]
 
 
   # A Fixnum that indicates what the first port is that can be used for hosting
@@ -450,10 +433,6 @@ class Djinn
   # A String that is returned to callers of set_property that provide an invalid
   # instance variable name to set.
   KEY_NOT_FOUND = "No property exists with the given name."
-
-  # A Fixnum that indicates how often the AppController on this node should ping
-  # the API checker app for the status of each App Engine API, in seconds.
-  API_STATUS_CHECK_IN_FREQUENCY = 300
 
 
   # Creates a new Djinn, which holds all the information needed to configure
@@ -487,7 +466,6 @@ class Djinn
     @state = "AppController just started"
     @num_appengines = 1
     @restored = false
-    @api_status = {}
     @all_stats = []
     @last_updated = 0
     @state_change_lock = Monitor.new()
@@ -500,7 +478,6 @@ class Djinn
     @last_sampling_time = {}
     @last_scaling_time = Time.now.to_i
     @app_upload_reservations = {}
-    @last_api_status = 0
   end
 
 
@@ -682,7 +659,8 @@ class Djinn
         end
         next if not node.is_appengine?
         app_manager = AppManagerClient.new(node.private_ip)
-        app_manager.restart_app_instances_for_app(appid)
+        app_manager.restart_app_instances_for_app(appid,
+          @app_info_map[appid]['language'])
       }
     }
 
@@ -728,11 +706,6 @@ class Djinn
         stop_ejabberd()
       end
 
-      if my_node.is_shadow? or my_node.is_appengine?
-        ApiChecker.stop()
-      end
-
-      maybe_stop_taskqueue_worker("apichecker")
       maybe_stop_taskqueue_worker(AppDashboard::APP_NAME)
 
       commands = {
@@ -755,11 +728,14 @@ class Djinn
       if has_soap_server?(my_node)
         stop_soap_server()
         stop_datastore_server()
+        stop_groomer_service()
       end
 
       TaskQueue.stop() if my_node.is_taskqueue_master?
       TaskQueue.stop() if my_node.is_taskqueue_slave?
       TaskQueue.stop_flower() if my_node.is_login?
+
+      Search.stop() if my_node.is_search?
 
       stop_app_manager_server()
       stop_infrastructure_manager()
@@ -961,7 +937,7 @@ class Djinn
       Djinn.log_debug("Uploading file at location #{archived_file}")
       keyname = @options['keyname']
       command = "#{APPSCALE_TOOLS_HOME}/bin/appscale-upload-app --file " +
-        "#{archived_file} --email #{email} --keyname #{keyname} 2>&1"
+        "'#{archived_file}' --email #{email} --keyname #{keyname} 2>&1"
       output = Djinn.log_run("#{command}")
       File.delete(archived_file)
       if output.include?("Your app can be reached at the following URL")
@@ -1196,6 +1172,7 @@ class Djinn
     Djinn.log_info("Shutting down app named [#{app_name}]")
     result = ""
     Djinn.log_run("rm -rf /var/apps/#{app_name}")
+    CronHelper.clear_app_crontab(app_name)
 
     # app shutdown process can take more than 30 seconds
     # so run it in a new thread to avoid 'execution expired'
@@ -1291,7 +1268,7 @@ class Djinn
   # Stop taskqueue worker on this local machine.
   #
   # Args:
-  #   app: The application ID
+  #   app: The application ID.
   def maybe_stop_taskqueue_worker(app)
     if my_node.is_taskqueue_master? or my_node.is_taskqueue_slave?
       Djinn.log_info("Stopping TaskQueue workers for app #{app}")
@@ -1304,7 +1281,7 @@ class Djinn
   # Start taskqueue worker on this local machine.
   #
   # Args:
-  #   app: The application ID
+  #   app: The application ID.
   def maybe_start_taskqueue_worker(app)
     if my_node.is_taskqueue_master? or my_node.is_taskqueue_slave?
       tqc = TaskQueueClient.new()
@@ -1313,6 +1290,17 @@ class Djinn
     end
   end
 
+  # Reload the queue information of an app and reload the queues if needed.
+  #
+  # Args:
+  #   app: The application ID.
+  def maybe_reload_taskqueue_worker(app)
+    if my_node.is_taskqueue_master? or my_node.is_taskqueue_slave?
+      tqc = TaskQueueClient.new()
+      result = tqc.reload_worker(app)
+      Djinn.log_info("Checking TaskQueue worker for app #{app}: #{result}")
+    end
+  end
 
   def update(app_names, secret)
     if !valid_secret?(secret)
@@ -1434,7 +1422,6 @@ class Djinn
       update_firewall()
       write_memcache_locations()
       write_zookeeper_locations()
-      update_api_status()
       flush_log_buffer()
 
       update_local_nodes()
@@ -1915,7 +1902,7 @@ class Djinn
     Nginx.clear_sites_enabled()
     HAProxy.clear_sites_enabled()
     Djinn.log_run("echo '' > /root/.ssh/known_hosts") # empty it out but leave the file there
-    CronHelper.clear_crontab()
+    CronHelper.clear_app_crontabs
   end
 
 
@@ -2360,6 +2347,29 @@ class Djinn
     return "OK"
   end
 
+  # Creates an Nginx configuration file for the Users/Apps soap server.
+  def configure_uaserver_nginx()
+    all_db_private_ips = []
+    @nodes.each { | node |
+      if node.is_db_master? or node.is_db_slave?
+        all_db_private_ips.push(node.private_ip)
+      end
+    }
+    Nginx.create_uaserver_config(all_db_private_ips)
+    Nginx.reload()
+  end
+
+  def configure_db_nginx()
+    all_db_private_ips = []
+    @nodes.each { | node |
+      if node.is_db_master? or node.is_db_slave?
+        all_db_private_ips.push(node.private_ip)
+      end
+    }
+    Nginx.create_datastore_server_config(all_db_private_ips, DatastoreServer::PROXY_PORT)
+    Nginx.reload()
+  end
+
 
   def write_database_info()
     table = @options["table"]
@@ -2405,9 +2415,10 @@ class Djinn
       elsif k == "@my_index" or k == "@api_status"
         # Don't back up @my_index - it's a node-specific pointer that
         # indicates which node is "our node" and thus should be regenerated
-        # via find_me_in_locations. Also don't worry about @api_status - it
-        # can take up a lot of space and can easily be regenerated with new
-        # data.
+        # via find_me_in_locations. 
+        # Also don't worry about @api_status - (used to be for deprecated
+        # API checker) it can take up a lot of space and can easily be 
+        # regenerated with new data.
         next
       end
 
@@ -2689,114 +2700,6 @@ class Djinn
 
     HelperFunctions.write_json_file(ZK_LOCATIONS_FILE, zookeeper_data)
   end
-
-  # Gets the status of the APIs of the AppScale deployment.
-  #
-  # Args:
-  #   secret: A string with the shared key for authentication.
-  # Returns:
-  #   A JSON string with the status of the APIs.
-  def get_api_status(secret)
-    if !valid_secret?(secret)
-      return BAD_SECRET_MSG
-    end
-    begin
-      return HelperFunctions.read_file(HEALTH_FILE, true)
-    rescue Errno::ENOENT
-      Djinn.log_warn("Couldn't read our API status - generating it now.")
-      update_api_status()
-      begin
-        return HelperFunctions.read_file(HEALTH_FILE, true)
-      rescue Errno::ENOENT
-        Djinn.log_warn("Couldn't generate API status at this time.")
-        return ''
-      end
-    end
-  end
-
-  # Contacts the API Checker application to learn which Google App Engine APIs
-  # are running, which have failed, and which are in an unknown state. To
-  # determine if an API is alive, we keep a running tally of its state and see
-  # if it was alive for a majority of the times we checked up on it.
-  # TODO: Consider only using 'running' if it was alive on every check and
-  # add a 'degraded' state for cases where it was not alive on a check.
-  #
-  # Returns:
-  #   A JSON-encoded Hash that maps each API name to its state (e.g., running,
-  #   failed).
-  def generate_api_status()
-    if Time.now.to_i - @last_api_status < API_STATUS_CHECK_IN_FREQUENCY
-      Djinn.log_debug("Not enough time has passed since last time we " +
-        "gathered API status - will try again later.")
-      return
-    end
-
-    if my_node.is_appengine?
-      apichecker_host = my_node.private_ip
-    else
-      apichecker_host = get_shadow.private_ip
-    end
-
-    Djinn.log_debug("Generating new API status by contacting API checker " +
-      "at #{apichecker_host}")
-    apichecker_url = "http://#{apichecker_host}:#{ApiChecker::SERVER_PORT}/health/all"
-
-    retries_left = 3
-    data = {}
-    begin
-      response = Net::HTTP.get_response(URI.parse(apichecker_url))
-      data = JSON.load(response.body)
-
-      if data.class != Hash
-        Djinn.log_error("API status received from host at #{apichecker_url} " +
-          "was not a Hash, but was a #{data.class.name} containing: #{data}")
-        return
-      end
-    rescue Exception
-      Djinn.log_error("Couldn't get API status from host at #{apichecker_url}")
-
-      if retries_left > 0
-        Kernel.sleep(5)
-        retries_left -= 1
-        retry
-      else
-        Djinn.log_warn("ApiChecker at #{apichecker_host} appears to be down - will " +
-          "try again later.")
-        return
-      end
-    end
-
-    majorities = {}
-
-    data.each { |k, v|
-      @api_status[k] = [] if @api_status[k].nil?
-      @api_status[k] << v
-
-      # If not enough API statuses are known yet, pad it with 'running' to avoid
-      # accidentally claiming that an API has failed without sufficient evidence
-      # of its failure.
-      @api_status[k] = HelperFunctions.shorten_to_n_items(10, @api_status[k],
-        "running")
-      majorities[k] = HelperFunctions.find_majority_item(@api_status[k])
-    }
-
-    @last_api_status = Time.now.to_i
-
-    json_state = JSON.dump(majorities)
-    return json_state
-  end
-
-
-  # Writes a file to the local filesystem that indicates if each Google App
-  # Engine API is currently running fine, experiences errors, or is in an
-  # unknown state.
-  def update_api_status()
-    api_status = generate_api_status()
-    if !api_status.nil? and !api_status.empty?
-      HelperFunctions.write_file(HEALTH_FILE, api_status)
-    end
-  end
-
 
   # Backs up information about what this node is doing (roles, apps it is
   # running) to ZooKeeper, for later recovery or updates by other nodes.
@@ -3192,7 +3095,7 @@ class Djinn
 
       next unless key.class == String
       newkey = key.gsub(NOT_EMAIL_REGEX, "")
-      if newkey.include? "_key"
+      if newkey.include? "_key" or newkey.include? "EC2_SECRET_KEY"
         if val.class == String
           newval = val.gsub(NOT_FQDN_OR_PLUS_REGEX, "")
         else
@@ -3243,33 +3146,15 @@ class Djinn
 
     initialize_server()
 
+    configure_db_nginx()
     write_memcache_locations()
     write_apploadbalancer_location()
     find_nearest_taskqueue()
     write_taskqueue_nodes_file()
+    write_search_node_file()
     setup_config_files()
     set_uaserver_ips()
     start_api_services()
-
-    # Since apichecker does health checks on the app engine apis,
-    # start it up there.
-
-    apichecker_ip = get_shadow.public_ip
-    apichecker_private_ip = get_shadow.private_ip
-    apichecker_ip = my_node.public_ip if my_node.is_appengine?
-    apichecker_private_ip = my_node.private_ip if my_node.is_appengine?
-    ApiChecker.init(apichecker_ip, apichecker_private_ip,  @@secret)
-
-    if my_node.is_shadow? or my_node.is_appengine?
-      ApiChecker.start(get_login.public_ip, @userappserver_private_ip)
-      @app_info_map['apichecker'] = {
-        'nginx' => ApiChecker::SERVER_PORT,
-        'nginx_https' => Nginx.get_ssl_port_for_app(ApiChecker::SERVER_PORT),
-        'haproxy' => HAProxy.app_listen_port(-1),
-        'appengine' => ["#{apichecker_private_ip}:19999"],
-        'language' => 'python27'
-      }
-    end
 
     # Start the AppDashboard.
     if my_node.is_login?
@@ -3283,8 +3168,6 @@ class Djinn
     Djinn.log_info("Starting cron service for #{AppDashboard::APP_NAME}")
     CronHelper.update_cron(get_login.public_ip, AppDashboard::LISTEN_PORT,
       AppDashboard::APP_LANGUAGE, AppDashboard::APP_NAME)
-
-    maybe_start_taskqueue_worker("apichecker")
 
     if my_node.is_login?
       TaskQueue.start_flower(@options['flower_password'])
@@ -3337,6 +3220,7 @@ class Djinn
           @state = "Starting up SOAP Server and Datastore Server"
           start_datastore_server()
           start_soap_server()
+          start_groomer_service()
           HelperFunctions.sleep_until_port_is_open(HelperFunctions.local_ip(), UserAppClient::SERVER_PORT)
         end
 
@@ -3359,6 +3243,7 @@ class Djinn
           @state = "Starting up SOAP Server and Datastore Server"
           start_datastore_server()
           start_soap_server()
+          start_groomer_service()
           HelperFunctions.sleep_until_port_is_open(HelperFunctions.local_ip(),
             UserAppClient::SERVER_PORT)
         end
@@ -3373,6 +3258,12 @@ class Djinn
     if my_node.is_appengine?
       threads << Thread.new {
         start_blobstore_server()
+      }
+    end
+
+    if my_node.is_search?
+      threads << Thread.new {
+        start_search_role()
       }
     end
 
@@ -3459,6 +3350,9 @@ class Djinn
     return true
   end
 
+  def start_search_role()
+    Search.start_master(@options['clear_datastore'])
+  end
 
   def start_taskqueue_master()
     TaskQueue.start_master(@options['clear_datastore'])
@@ -3488,6 +3382,17 @@ class Djinn
     MonitInterface.start(:appmanagerserver, start_cmd, stop_cmd, port, env_vars, nil, nil, start_cmd)
   end
 
+  # Starts the groomer service on this node. The groomer cleans the datastore of deleted 
+  # items and removes old logs.
+  def start_groomer_service()
+    @state = "Starting Groomer Service"
+    Djinn.log_info("Starting groomer service.")
+    # Groomer requires locations of ZK.
+    write_zookeeper_locations()
+    GroomerService.start()
+    Djinn.log_info("Done starting groomer service.")
+  end
+
   def start_soap_server()
     db_master_ip = nil
     @nodes.each { |node|
@@ -3511,11 +3416,13 @@ class Djinn
     end
 
     start_cmd = ["python #{APPSCALE_HOME}/AppDB/soap_server.py",
-            "-t #{table} -s #{HelperFunctions.get_secret}"].join(' ')
+            "-t #{table}"].join(' ')
     stop_cmd = "/usr/bin/pkill -9 soap_server"
     port = [4343]
 
-    MonitInterface.start(:uaserver, start_cmd, stop_cmd, port, env_vars, nil, nil, start_cmd)
+    MonitInterface.start(:uaserver, start_cmd, stop_cmd, port, env_vars)
+
+    configure_uaserver_nginx()
   end
 
   def start_datastore_server
@@ -3528,10 +3435,8 @@ class Djinn
 
     table = @options['table']
     zoo_connection = get_zk_connection_string(@nodes)
-    DatastoreServer.start(db_master_ip, @userappserver_private_ip, my_ip, table, zoo_connection)
+    DatastoreServer.start(db_master_ip, @userappserver_private_ip, my_ip, table)
     HAProxy.create_datastore_server_config(my_node.private_ip, DatastoreServer::PROXY_PORT, table)
-    Nginx.create_datastore_server_config(my_node.private_ip, DatastoreServer::PROXY_PORT)
-    Nginx.reload()
 
     # TODO check the return value
     DatastoreServer.is_running(my_ip)
@@ -3550,6 +3455,14 @@ class Djinn
   def stop_app_manager_server
     MonitInterface.stop(:appmanagerserver)
   end
+
+  # Stops the groomer service.
+  def stop_groomer_service()
+    Djinn.log_info("Stopping groomer service.")
+    GroomerService.stop()
+    Djinn.log_info("Done stopping groomer service.")
+  end
+
 
   def stop_datastore_server
     DatastoreServer.stop(@options['table'])
@@ -3893,9 +3806,20 @@ class Djinn
     HelperFunctions.write_file(rabbitmq_file, rabbitmq_contents)
   end
 
+  # Write the location of where SOLR and the search server are located
+  # if they are configured.
+  def write_search_node_file()
+    search_ip = ""
+    @nodes.each { |node|
+      search_ip = node.private_ip if node.is_search?
+      break;
+    }
+    HelperFunctions.write_file(Search::SEARCH_LOCATION_FILE,  search_ip)
+  end
+
   # Writes a file to the local file system that tells the taskqueue master
   # all nodes which are taskqueue nodes.
-  def write_taskqueue_nodes_file
+  def write_taskqueue_nodes_file()
     taskqueue_ips = []
     @nodes.each { |node|
       taskqueue_ips << node.private_ip if node.is_taskqueue_master? or node.is_taskqueue_slave?
@@ -4208,10 +4132,11 @@ HOSTS
   #   app_name: Name of application to construct an error application for
   #   err_msg: A String message that will be displayed as
   #            the reason why we couldn't start their application.
-  def place_error_app(app_name, err_msg)
-    Djinn.log_info("Placing error application for #{app_name} because of: #{err_msg}")
+  #   language: The language the application is written in.
+  def place_error_app(app_name, err_msg, language)
+    Djinn.log_error("Placing error application for #{app_name} because of: #{err_msg}")
     ea = ErrorApp.new(app_name, err_msg)
-    ea.generate()
+    ea.generate(language)
   end
 
   def start_appengine()
@@ -4235,7 +4160,7 @@ HOSTS
       db_private_ip = @userappserver_private_ip
     end
 
-    Djinn.log_debug("Starting appengine - pbserver is at [#{db_private_ip}]")
+    Djinn.log_debug("Starting appengine")
 
     uac = UserAppClient.new(db_private_ip, @@secret)
     if @restored == false
@@ -4295,12 +4220,14 @@ HOSTS
 
     app_dir = "/var/apps/#{app}/app"
     app_path = "/opt/appscale/apps/#{app}.tar.gz"
+    FileUtils.rm_rf(app_dir)
     FileUtils.mkdir_p(app_dir)
+    Djinn.log_debug("App untar directory created from scratch")
 
     # First, make sure we can download the app, and if we can't, throw up a
     # dummy app letting the user know there was a problem.
     if !copy_app_to_local(app)
-      place_error_app(app, "ERROR: Failed to copy app: #{app}")
+      place_error_app(app, "ERROR: Failed to copy app: #{app}", app_language)
       app_language = "python27"
     end
 
@@ -4310,14 +4237,15 @@ HOSTS
     # app.
     if !HelperFunctions.app_has_config_file?(app_path)
       place_error_app(app, "ERROR: No app.yaml or appengine-web.xml for app " +
-        app)
-      app_language = "python27"
+        app, app_language)
     end
 
     HelperFunctions.setup_app(app, true)
 
     if is_new_app
       maybe_start_taskqueue_worker(app)
+    else
+      maybe_reload_taskqueue_worker(app)
     end
 
     if is_new_app
@@ -4381,7 +4309,7 @@ HOSTS
         # This specific exception may be a json parse error
         error_msg = "ERROR: Unable to parse app.yaml file for #{app}." + \
                     " Exception of #{e.class} with message #{e.message}"
-        place_error_app(app, error_msg)
+        place_error_app(app, error_msg, app_language)
         static_handlers = []
       end
 
@@ -4425,7 +4353,7 @@ HOSTS
 
           if pid == -1
             place_error_app(app, "ERROR: Unable to start application " + \
-                "#{app}. Please check the application logs.")
+                "#{app}. Please check the application logs.", app_language)
           end
 
           # Tell the AppController at the login node (which runs HAProxy) that a
@@ -4447,7 +4375,8 @@ HOSTS
         }
       else
         Djinn.log_info("Restarting AppServers hosting old version of #{app}")
-        app_manager.restart_app_instances_for_app(app)
+        result = app_manager.restart_app_instances_for_app(app, 
+          @app_info_map[app]['language'])
       end
 
       if is_new_app

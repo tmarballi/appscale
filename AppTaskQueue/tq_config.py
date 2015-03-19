@@ -31,6 +31,9 @@ class TaskQueueConfig():
 
   # Enum code for broker to use.
   RABBITMQ = 0
+ 
+  # Max concurrency per worker.
+  CELERY_CONCURRENCY = 10
 
   # The default YAML used if a queue.yaml or queue.xml is not supplied.
   DEFAULT_QUEUE_YAML = \
@@ -442,7 +445,15 @@ CELERY_ANNOTATIONS = {
 # See http://stackoverflow.com/questions/7144025/temporary-queue-made-in-celery
 # for more information on this issue.
 CELERY_IGNORE_RESULT = True
-CELERY_STORE_ERRORS_EVEN_IF_IGNORED = True
+CELERY_STORE_ERRORS_EVEN_IF_IGNORED = False
+
+# One month expiration date because a task can be deferred that long.
+CELERY_AMQP_TASK_RESULT_EXPIRES = 2678400
+
+# Disable prefetching for celery workers. If tasks are small in duration this
+# should be set to a higher value (64-128) for increased performance.
+# See: http://celery.readthedocs.org/en/latest/userguide/optimizing.html#worker-settings
+CELERYD_PREFETCH_MULTIPLIER = 1
 """
     config_file = self._app_id + ".py" 
     file_io.write(self.CELERY_CONFIG_DIR + config_file, config)

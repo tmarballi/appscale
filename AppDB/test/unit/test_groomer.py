@@ -4,6 +4,7 @@
 import datetime
 import os
 import sys
+import time
 import unittest
 from flexmock import flexmock
 
@@ -14,12 +15,12 @@ from google.appengine.ext import db
 from google.appengine.datastore import entity_pb
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))  
-import dbconstants
-import datastore_server
 import appscale_datastore_batch
+import datastore_server
+import dbconstants
+import entity_utils
 import groomer
 
-from zkappscale import zktransaction as zk
 from zkappscale.zktransaction import ZKTransactionException
 
 
@@ -32,6 +33,9 @@ class FakeQuery():
 class FakeDatastore():
   def __init__(self):
     pass
+  def range_query(self, table, schema, start, end, batch_size, 
+    start_inclusive=True, end_inclusive=True):
+    return []
   def batch_delete(self, table, row_keys):
     raise dbconstants.AppScaleDBConnectionError("Bad connection")
 
@@ -75,7 +79,7 @@ class TestGroomer(unittest.TestCase):
 
   def test_get_groomer_lock(self):
     zookeeper = flexmock()
-    zookeeper.should_receive("get_datastore_groomer_lock").and_return(True)
+    zookeeper.should_receive("get_lock_with_path").and_return(True)
     dsg = groomer.DatastoreGroomer(zookeeper, "cassandra", "localhost:8888")
     self.assertEquals(True, dsg.get_groomer_lock())
 
@@ -87,18 +91,18 @@ class TestGroomer(unittest.TestCase):
     self.assertEquals(False, dsg.hard_delete_row("some_key"))
 
   def test_get_root_key_from_entity_key(self):
-    self.assertEquals("hi/bye\x01", groomer.DatastoreGroomer.\
+    self.assertEquals("hi/bye\x01", entity_utils.\
       get_root_key_from_entity_key("hi/bye\x01otherstuff\x01moar"))
 
-    self.assertEquals("hi/\x01", groomer.DatastoreGroomer.\
+    self.assertEquals("hi/\x01", entity_utils.\
       get_root_key_from_entity_key("hi/\x01otherstuff\x01moar"))
 
   def test_get_prefix_from_entity(self):
-    self.assertEquals("hi\x00bye", groomer.DatastoreGroomer.\
+    self.assertEquals("hi\x00bye", entity_utils.\
       get_prefix_from_entity_key("hi\x00bye\x00some\x00other\x00stuff"))
 
     # Test empty namespace (very common).
-    self.assertEquals("hi\x00", groomer.DatastoreGroomer.\
+    self.assertEquals("hi\x00", entity_utils.\
       get_prefix_from_entity_key("hi\x00\x00some\x00other\x00stuff"))
 
   def test_run_groomer(self):
@@ -108,6 +112,8 @@ class TestGroomer(unittest.TestCase):
     dsg.should_receive("get_entity_batch").and_return([])
     dsg.should_receive("process_entity")
     dsg.should_receive("update_statistics").and_raise(Exception)
+    dsg.should_receive("remove_old_logs").and_return()
+    dsg.should_receive("remove_old_tasks_entities").and_return()
     ds_factory = flexmock(appscale_datastore_batch.DatastoreFactory)
     ds_factory.should_receive("getDatastore").and_return(FakeDatastore())
     self.assertRaises(Exception, dsg.run_groomer)
@@ -119,12 +125,13 @@ class TestGroomer(unittest.TestCase):
     dsg = groomer.DatastoreGroomer(zookeeper, "cassandra", "localhost:8888")
     dsg = flexmock(dsg)
     dsg.should_receive('process_statistics')
-    self.assertEquals(True, dsg.process_entity({'key':{dbconstants.APP_ENTITY_SCHEMA[0]:'ent',
+    dsg.should_receive('verify_entity')
+    self.assertEquals(True,
+      dsg.process_entity({'key':{dbconstants.APP_ENTITY_SCHEMA[0]:'ent',
       dbconstants.APP_ENTITY_SCHEMA[1]:'version'}}))
  
   def test_process_statistics(self):
     zookeeper = flexmock()
-    flexmock(entity_pb).should_receive('EntityProto').and_return(FakeEntity())
     flexmock(datastore_server.DatastoreDistributed)\
       .should_receive("get_entity_kind").and_return("kind")
     
@@ -134,10 +141,10 @@ class TestGroomer(unittest.TestCase):
      
     # This one gets ignored 
     dsg.should_receive("initialize_kind")
-    self.assertEquals(True, dsg.process_statistics("key", "ent", "2"))
-    self.assertEquals(dsg.stats, {'app_id':{'kind':{'size':3, 'number':1}}})
-    self.assertEquals(True, dsg.process_statistics("key", "ent", "2"))
-    self.assertEquals(dsg.stats, {'app_id':{'kind':{'size':6, 'number':2}}})
+    self.assertEquals(True, dsg.process_statistics("key", FakeEntity(), 1))
+    self.assertEquals(dsg.stats, {'app_id':{'kind':{'size':1, 'number':1}}})
+    self.assertEquals(True, dsg.process_statistics("key", FakeEntity(), 1))
+    self.assertEquals(dsg.stats, {'app_id':{'kind':{'size':2, 'number':2}}})
  
   def test_initialize_kind(self):
     zookeeper = flexmock()
@@ -159,6 +166,8 @@ class TestGroomer(unittest.TestCase):
     zookeeper.should_receive("is_blacklisted").and_return(False)
     zookeeper.should_receive("notify_failed_transaction").and_return(True)
 
+    flexmock(time)
+    time.should_receive('sleep').and_return()
 
     flexmock(FakeDatastore)
     FakeDatastore.should_receive("batch_delete")
@@ -166,17 +175,21 @@ class TestGroomer(unittest.TestCase):
     dsg = groomer.DatastoreGroomer(zookeeper, "cassandra", "localhost:8888")
     dsg = flexmock(dsg)
     dsg.should_receive("hard_delete_row").and_return(True)
-    flexmock(groomer.DatastoreGroomer).should_receive(
+
+    flexmock(entity_utils)
+    entity_utils.should_receive(
       "get_root_key_from_entity_key").and_return("key")
-    flexmock(groomer.DatastoreGroomer).should_receive(
+    entity_utils.should_receive(
       "get_prefix_from_entity_key").and_return("app/ns")
+
     dsg.db_access = FakeDatastore()
 
     # Successful operation.
     self.assertEquals(True, dsg.process_tombstone("key", "entity", "1"))
 
     # Failure on release lock but delete was successful.
-    zookeeper.should_receive("release_lock").and_raise(ZKTransactionException('zk'))
+    zookeeper.should_receive("release_lock").\
+      and_raise(ZKTransactionException('zk'))
     self.assertEquals(True, dsg.process_tombstone("key", "entity", "1"))
 
     # Hard delete failed.
@@ -188,7 +201,8 @@ class TestGroomer(unittest.TestCase):
     self.assertEquals(False, dsg.process_tombstone("key", "entity", "1"))
   
     # Failed to acquire lock with an exception.
-    zookeeper.should_receive("acquire_lock").and_raise(ZKTransactionException('zk'))
+    zookeeper.should_receive("acquire_lock").\
+      and_raise(ZKTransactionException('zk'))
     self.assertEquals(False, dsg.process_tombstone("key", "entity", "1"))
 
   def test_stop(self):
@@ -247,6 +261,6 @@ class TestGroomer(unittest.TestCase):
     stats.should_receive("KindStat").and_return(FakeEntity())
     dsg = groomer.DatastoreGroomer(zookeeper, "cassandra", "localhost:8888")
     self.assertRaises(Exception, dsg.create_kind_stat_entry, 0, 0, 0)
-     
+
 if __name__ == "__main__":
   unittest.main()    

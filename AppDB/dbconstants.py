@@ -5,9 +5,21 @@ SECRET_LOCATION = "/etc/appscale/secret.key"
 
 ERROR_DEFAULT = "DB_ERROR:"
 NONEXISTANT_TRANSACTION = "0"
+
+# The lowest character to separate different fields in a row key.
 KEY_DELIMITER = '\x00'
+
+# The character used to separate kinds in an ancestry.
 KIND_SEPARATOR = '\x01'
+
+# The character between the kind and the ID/name of an entity.
 ID_SEPARATOR = ":"
+
+# The maximum number of composite indexes an application can have.
+MAX_NUMBER_OF_COMPOSITE_INDEXES = 1000
+
+# A string used to create end keys when doing range queries.
+TERMINATING_STRING = chr(255) * 500
 
 # Table names
 USERS_TABLE = "USERS__"
@@ -20,7 +32,6 @@ COMPOSITE_TABLE = "COMPOSITE_INDEXES__"
 APP_ID_TABLE = "APP_IDS__"
 APP_ENTITY_TABLE = "ENTITIES__"
 APP_KIND_TABLE = "KINDS__"
-JOURNAL_TABLE = "JOURNAL__"
 METADATA_TABLE = "METADATA__"
 
 INITIAL_TABLES = [ASC_PROPERTY_TABLE,
