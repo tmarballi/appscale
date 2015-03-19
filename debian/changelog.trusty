@@ -1,8 +1,8 @@
-appscale (1.14-0.REVNOprecise) precise; urgency=low
+appscale (2.2-0.REVNOprecise) precise; urgency=low
 
-  * New release (1.14.0)
+  * New release (2.2.0)
   
- -- Graziano Obertelli <g@appscale.com> Fri, 18 April 2014 16:58:00 -0800
+ -- Graziano Obertelli <g@appscale.com> Fri, 13 Match 2015 16:58:00 -0800
 
 appscale (1.4-0.REVNOlucid) lucid; urgency=low
 
