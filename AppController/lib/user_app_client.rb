@@ -19,14 +19,14 @@ class UserAppClient
 
 
   # The port that the UserAppServer binds to, by default.
-  SERVER_PORT = 4343
+  SERVER_PORT = 4342
 
 
   def initialize(ip, secret)
     @ip = ip
     @secret = secret
     
-    @conn = SOAP::RPC::Driver.new("https://#{@ip}:#{SERVER_PORT}")
+    @conn = SOAP::RPC::Driver.new("http://#{@ip}:#{SERVER_PORT}")
     @conn.add_method("change_password", "user", "password", "secret")
     @conn.add_method("commit_new_user", "user", "passwd", "utype", "secret")
     @conn.add_method("commit_new_app", "user", "appname", "language", "secret")
