@@ -435,6 +435,9 @@ class Djinn
   KEY_NOT_FOUND = "No property exists with the given name."
 
 
+  # Where to put logs.
+  LOG_FILE = "/var/log/appscale/controller-17443.log" 
+
   # Creates a new Djinn, which holds all the information needed to configure
   # and deploy all the services on this node.
   def initialize()
@@ -446,8 +449,9 @@ class Djinn
     # it was logged.
     @@logs_buffer = []
 
-    STDOUT.sync = true
-    @@log = Logger.new(STDOUT)
+    file = File.open(LOG_FILE, File::WRONLY | File::APPEND | File::CREAT)
+
+    @@log = Logger.new(file)
     @@log.level = Logger::DEBUG
 
     @nodes = []
@@ -4012,8 +4016,8 @@ HOSTS
       'EC2_HOME' => ENV['EC2_HOME'],
       'JAVA_HOME' => ENV['JAVA_HOME']
     }
-    start = "/usr/bin/ruby #{remote_home}/AppController/djinnServer.rb"
-    stop = "/usr/bin/ruby #{remote_home}/AppController/terminate.rb"
+    start = "/usr/sbin/service appscale-controller start"
+    stop = "/usr/sbin/service appscale-controller stop"
 
     # remove any possible appcontroller state that may not have been
     # properly removed in non-cloud runs

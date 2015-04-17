@@ -1879,7 +1879,9 @@ class DatastoreDistributed():
     for index, ent in enumerate(refs):
       key = keys[index]
       ent = ent[key]['reference']
-      rowkeys.append(ent)
+      # Make sure not to fetch the same entity more than once.
+      if ent not in rowkeys:
+        rowkeys.append(ent)
     return self.__fetch_entities_from_row_list(rowkeys, app_id)
 
   def __extract_entities(self, kv):
@@ -3661,7 +3663,7 @@ class MainHandler(tornado.web.RequestHandler):
     method = apirequest.method()
     http_request_data = apirequest.request()
     start = time.time()
-    logging.info("Request type:{0}".format(method))
+    logging.debug("Request type:{0}".format(method))
     if method == "Put":
       response, errcode, errdetail = self.put_request(app_id, 
                                                  http_request_data)
@@ -3705,7 +3707,7 @@ class MainHandler(tornado.web.RequestHandler):
       errdetail = "Unknown datastore message" 
 
     time_taken = time.time() - start
-
+    logging.debug("{0}/{1} took {2} seconds".format(app_id, method, time_taken))
     if method in STATS:
       if errcode in STATS[method]:
         prev_req, pre_time = STATS[method][errcode]
