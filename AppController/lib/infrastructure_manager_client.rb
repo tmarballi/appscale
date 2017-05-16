@@ -168,6 +168,7 @@ class InfrastructureManagerClient
     parameters['instance_ids'] = instance_ids
     parameters['region'] = options['region']
     parameters['IS_VERBOSE'] = options['verbose']
+    parameters['zone'] = options['zone']
 
     terminate_result = make_call(NO_TIMEOUT, RETRY_ON_FAIL,
       "terminate_instances") {
