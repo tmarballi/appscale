@@ -169,6 +169,7 @@ class InfrastructureManagerClient
     parameters['region'] = options['region']
     parameters['IS_VERBOSE'] = options['verbose']
     parameters['zone'] = options['zone']
+    parameters['autoscale_agent'] = true
 
     terminate_result = make_call(NO_TIMEOUT, RETRY_ON_FAIL,
       "terminate_instances") {
