@@ -5541,7 +5541,7 @@ HOSTS
       total_req_in_queue)
     
     current_capacity = calculate_current_capacity(num_appengines, current_sessions)
-    if current_capacity >= MAX_CAPACITY_THRESHOLD?
+    if current_capacity >= MAX_CAPACITY_THRESHOLD
       if Time.now.to_i - @last_decision[app_name] < SCALEDOWN_THRESHOLD * DUTY_CYCLE
         Djinn.log_debug("Not enough time has passed to scale up app #{app_name}")
         return 0
@@ -5552,7 +5552,7 @@ HOSTS
         "within this machine.")
       return appservers_to_scale
     
-    elsif current_capacity <= MIN_CAPACITY_THRESHOLD?
+    elsif current_capacity <= MIN_CAPACITY_THRESHOLD
       if Time.now.to_i - @last_decision[app_name] < SCALEDOWN_THRESHOLD * DUTY_CYCLE
         Djinn.log_debug("Not enough time has passed to scale down app #{app_name}")
         return 0
