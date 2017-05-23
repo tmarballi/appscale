@@ -5529,8 +5529,7 @@ HOSTS
     return 0 if @options['autoscale'].downcase != "true"
 
     # We need the haproxy stats to decide upon what to do.
-    total_requests_seen, total_req_in_queue, current_sessions,
-      time_requests_were_seen = HAProxy.get_haproxy_stats(app_name)
+    total_requests_seen, total_req_in_queue, current_sessions, time_requests_were_seen = HAProxy.get_haproxy_stats(app_name)
 
     if time_requests_were_seen == :no_backend
       Djinn.log_warn("Didn't see any request data - not sure whether to scale up or down.")
