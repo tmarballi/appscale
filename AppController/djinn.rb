@@ -5557,7 +5557,7 @@ HOSTS
         return 0
       end
       appservers_to_scale = calculate_appservers_needed(num_appengines, current_sessions)
-      Djinn.log_debug("The deployment has reached its maximum capacity threshold for " +
+      Djinn.log_debug("The deployment has reached its minimum capacity threshold for " +
         "app #{app_name} - Advising that we scale down #{appservers_to_scale} AppServers " +
         "within this machine.")
       return appservers_to_scale
