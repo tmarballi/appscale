@@ -386,7 +386,7 @@ CONFIG
     if monitoring_info.empty?
       Djinn.log_warn("Didn't see any monitoring info - #{full_app_name} may not " +
         "be running.")
-      return :no_change, :no_change, :no_backend
+      return :no_change, :no_change, :no_change, :no_backend
     end
 
     monitoring_info.each_line { |line|
