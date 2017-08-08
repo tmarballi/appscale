@@ -2343,8 +2343,12 @@ class Djinn
         rescue AppScaleException
           # We assume here that we need to create the VM (that is the user
           # specified node-#).
+          Djinn.log_warn("Exists beforehand: #{new_nodes_roles[ip_or_node]}")
           new_nodes_roles[ip_or_node] = [] unless new_nodes_roles[ip_or_node]
+          Djinn.log_warn("After check #{new_nodes_roles[ip_or_node]}")
           new_nodes_roles[ip_or_node] << role
+          Djinn.log_warn("Complete New Nodes Roles: #{new_nodes_roles}")
+          Djinn.log_warn("New Nodes Roles for IP or Node: #{new_nodes_roles[ip_or_node]}")
           next
         end
 
@@ -2391,6 +2395,7 @@ class Djinn
       disks = Array.new(num_of_vms, nil)
       imc = InfrastructureManagerClient.new(@@secret)
       begin
+        Djinn.log_warn("Num of vms: #{num_of_vms}, New nodes roles values: #{new_nodes_roles.values}")
         new_nodes_info = imc.spawn_vms(num_of_vms, @options,
            new_nodes_roles.values, disks)
       rescue FailedNodeException, AppScaleException => exception
@@ -5162,6 +5167,8 @@ HOSTS
       # to improve autoscaling/downscaling by using the capacity as a measure.
 
       Integer(needed_appservers/3).downto(0) {
+        nodes_needed = needed_appservers/3
+        Djinn.log_warn("Calculated nodes needed to spawn: #{nodes_needed}.")
         vms_to_spawn += 1
         if vm_scaleup_capacity < vms_to_spawn
           Djinn.log_warn("Only have capacity to start #{vm_scaleup_capacity}" +
@@ -5170,6 +5177,7 @@ HOSTS
         end
         roles_needed["appengine"] = [] unless roles_needed["appengine"]
         roles_needed["appengine"] << "node-#{vms_to_spawn}"
+        Djinn.log_warn("Vms to spawn: #{vms_to_spawn} and roles needed: #{roles_needed['appengine']}")
       }
     end
 
@@ -5192,6 +5200,7 @@ HOSTS
           return
         end
 
+        Djinn.log_warn("Roles needed while starting roles on nodes: #{roles_needed}")
         result = start_roles_on_nodes(JSON.dump(roles_needed), @@secret)
         if result != "OK"
           Djinn.log_error("Was not able to add nodes because: #{result}.")

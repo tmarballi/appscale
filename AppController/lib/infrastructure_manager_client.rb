@@ -204,6 +204,7 @@ class InfrastructureManagerClient
     parameters['region'] = options['region']
     parameters['IS_VERBOSE'] = options['verbose']
 
+    Djinn.log_warn("JOBS : #{jobs}")
     run_result = run_instances(parameters)
     Djinn.log_debug("[IM] Run instances info says [#{run_result}]")
     reservation_id = run_result['reservation_id']
@@ -214,6 +215,7 @@ class InfrastructureManagerClient
       Djinn.log_debug("[IM] Describe instances state is #{describe_result['state']} " +
         "and vm_info is #{describe_result['vm_info'].inspect}.")
 
+      Djinn.log_warn("DESCRIBE RESULT: #{describe_result}")
       if describe_result["state"] == "running"
         vm_info = describe_result["vm_info"]
         break
