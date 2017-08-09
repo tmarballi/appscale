@@ -5185,6 +5185,7 @@ HOSTS
             " vms, so spawning only maximum allowable nodes.")
           break
         end
+        Djinn.log_warn("Existing roles needed: #{roles_needed['appengine']}")
         roles_needed["appengine"] = [] unless roles_needed["appengine"]
         roles_needed["appengine"] << "node-#{vms_to_spawn}"
         Djinn.log_warn("Vms to spawn: #{vms_to_spawn} and roles needed: #{roles_needed['appengine']}")
