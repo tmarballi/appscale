@@ -1358,10 +1358,11 @@ class ZKTransaction:
           transaction = long(txid.lstrip(APP_TX_PREFIX))
           try:
             self.resolve_batch(app_id, transaction)
-            self.notify_failed_transaction(app_id, transaction)
           except (AppScaleDBConnectionError, FailedBatch):
             self.logger.exception(
               'Failed to clean up lock for {}:{}'.format(app_id, transaction))
+          finally:
+            self.notify_failed_transaction(app_id, transaction)
       except kazoo.exceptions.NoNodeError:
         # Transaction id disappeared during garbage collection.
         # The transaction may have finished successfully.
@@ -1391,3 +1392,35 @@ class ZKTransaction:
       # there is no transaction yet.
       return []
     return [int(txid.lstrip(APP_TX_PREFIX)) for txid in txlist]
+
+  def clean_tx_node(self, project_id, txid, is_xg):
+    """ Removes a transaction entry from ZooKeeper.
+
+    Use this only after the max transaction time has passed.
+
+    Args:
+      project_id: A string specifying a project ID.
+      txid: An integer specifying a transaction ID.
+      is_xg: A boolean indicating that this is a cross-group transaction.
+    """
+    txnode = '/appscale/apps/{}/txids/tx{}'.format(
+      project_id, str(txid).zfill(10))
+    # If the node no longer exists, it doesn't need to be cleaned up.
+    try:
+      self.handle.get(txnode)
+    except NoNodeError:
+      return
+
+    try:
+      self.resolve_batch(project_id, txid)
+    except (AppScaleDBConnectionError, FailedBatch):
+      self.logger.error(
+        'Unable to clean up lock for {}/{}'.format(project_id, txid))
+    finally:
+      try:
+        self.handle.delete(txnode, recursive=is_xg)
+      except NoNodeError:
+        return
+
+    self.logger.info(
+      'Cleaned up transaction {}/{} after timeout'.format(project_id, txid))
