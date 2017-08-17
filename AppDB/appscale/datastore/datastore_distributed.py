@@ -3183,6 +3183,7 @@ class DatastoreDistributed():
       txn: An integer specifying a transaction ID.
     """
     metadata = self.datastore_batch.get_transaction_metadata(app, txn)
+    self.logger.info('metadata: {}'.format(metadata))
 
     # If too much time has passed, the transaction cannot be committed.
     if 'start' not in metadata:
@@ -3232,6 +3233,7 @@ class DatastoreDistributed():
                                 for key in metadata['deletes']])
       current_values = self.datastore_batch.batch_get_entity(
         dbconstants.APP_ENTITY_TABLE, entity_table_keys, APP_ENTITY_SCHEMA)
+      self.logger.info('old values: {}'.format(current_values))
 
       batch = []
       entity_changes = []
@@ -3293,22 +3295,27 @@ class DatastoreDistributed():
     try:
       self.apply_txn_changes(app_id, txn_id)
     except dbconstants.TxTimeoutException as timeout:
+      self.logger.exception('timeout')
       return commitres_pb.Encode(), datastore_pb.Error.TIMEOUT, str(timeout)
     except dbconstants.AppScaleDBConnectionError:
       self.logger.exception('DB connection error during commit')
       return (commitres_pb.Encode(), datastore_pb.Error.INTERNAL_ERROR,
               'Datastore connection error on Commit request.')
     except dbconstants.ConcurrentModificationException as error:
+      self.logger.exception('concurrent modification')
       return (commitres_pb.Encode(), datastore_pb.Error.CONCURRENT_TRANSACTION,
               str(error))
     except dbconstants.TooManyGroupsException as error:
+      self.logger.exception('concurrent modification')
       return (commitres_pb.Encode(), datastore_pb.Error.BAD_REQUEST,
               str(error))
     except entity_lock.LockTimeout as error:
+      self.logger.exception('lock timeout')
       return (commitres_pb.Encode(), datastore_pb.Error.TIMEOUT,
               str(error))
 
     self.zookeeper.remove_tx_node(app_id, txn_id)
+    logging.info('commit succeeded')
     return commitres_pb.Encode(), 0, ""
 
   def rollback_transaction(self, app_id, http_request_data):
