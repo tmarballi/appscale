@@ -1,8 +1,10 @@
 """ A Celery worker script that executes push tasks with HTTP requests. """
 import datetime
+import eventlet
 import json
 import logging
 import os
+import random
 import sys
 
 from appscale.common import appscale_info
@@ -43,6 +45,10 @@ ds_distrib = datastore_distributed.DatastoreDistributed(
   'appscaledashboard', connection_str, require_indexes=False)
 apiproxy_stub_map.apiproxy.RegisterStub('datastore_v3', ds_distrib)
 os.environ['APPLICATION_ID'] = 'appscaledashboard'
+
+
+# The maximum amount of time to wait for instances to become available.
+AVAILABILITY_WAIT = datetime.timedelta(minutes=10)
 
 
 def get_wait_time(retries, args):
@@ -194,6 +200,19 @@ def execute_task(task, headers, args):
       if redirects_left == 0:
         raise task.retry(countdown=wait_time)
       redirects_left -= 1
+    elif response.status == 503:
+      if datetime.datetime.utcnow() - start_time > AVAILABILITY_WAIT:
+        message = ('{task} waited too long for available instances. '
+                   'Retrying in {wait} seconds'.format(task=task['task_name'],
+                                                       wait=wait_time))
+        logger.warning(message)
+        raise task.retry(countdown=wait_time)
+
+      service_backoff_time = random.randint(1, 5)
+      logger.warning('No available instances. '
+                     'Waiting {} seconds'.format(service_backoff_time))
+      eventlet.sleep(seconds=service_backoff_time)
+      continue
     else:
       message = ('Received a {status} for {task}. '
                  'Retrying in {wait} secs.'.format(status=response.status,
