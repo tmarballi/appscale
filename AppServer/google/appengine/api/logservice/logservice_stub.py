@@ -237,6 +237,7 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     rl.status = status
     rl.responseSize = response_size
     rl.endTime = end_time
+    rl.finished = 1
     self._pending_requests_applogs[request_id].finish()
     buf = rl.to_bytes()
     packet = 'l%s%s' % (struct.pack('I', len(buf)), buf)
