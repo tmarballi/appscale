@@ -629,13 +629,14 @@ class Module(object):
           logservice.end_request(request_id, status_code, content_length)
           logging.info('%(module_name)s: '
                        '"%(method)s %(resource)s %(http_version)s" '
-                       '%(status)d %(content_length)s',
+                       '%(status)d %(content_length)s %(request_id)s',
                        {'module_name': self.name,
                         'method': method,
                         'resource': resource,
                         'http_version': http_version,
                         'status': status_code,
-                        'content_length': content_length or '-'})
+                        'content_length': content_length or '-',
+                        'request_id': request_id})
         return start_response(status, response_headers, exc_info)
 
       if (environ['REQUEST_METHOD'] in ('GET', 'HEAD', 'TRACE') and
