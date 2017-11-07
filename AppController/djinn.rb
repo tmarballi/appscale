@@ -1112,6 +1112,8 @@ class Djinn
     @nodes.each { |node|
       if node.jobs.include? 'compute'
         @options['compute_instance_type'] = node.instance_type
+        break
+      end
     }
     return "OK"
   end
