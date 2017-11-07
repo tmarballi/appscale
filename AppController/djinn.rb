@@ -1109,6 +1109,10 @@ class Djinn
       @options['ec2_url'] = @options['EC2_URL']
     end
 
+    @nodes.each { |node|
+      if node.jobs.include? 'compute'
+        @options['compute_instance_type'] = node.instance_type
+    }
     return "OK"
   end
 
@@ -2312,6 +2316,7 @@ class Djinn
       disks = Array.new(new_nodes_roles.length, nil)
       imc = InfrastructureManagerClient.new(@@secret)
       begin
+        Djinn.log_warn("OPTIONS #{@options}")
         new_nodes_info = imc.spawn_vms(new_nodes_roles.length, @options,
            new_nodes_roles.values, disks)
       rescue FailedNodeException, AppScaleException => exception
