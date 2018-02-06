@@ -14,7 +14,7 @@ require 'helperfunctions'
 # costs, which may charge on an hourly basis).
 class DjinnJobData
   attr_accessor :public_ip, :private_ip, :jobs, :instance_id, :cloud, :ssh_key
-  attr_accessor :disk, attr_accessor :instance_type
+  attr_accessor :disk, :instance_type
 
   def initialize(json_data, keyname)
     if json_data.class != Hash
