@@ -754,12 +754,13 @@ class Djinn
         raise AppScaleException.new(msg)
       end
       if !node['public_ip'] || !node['private_ip'] || !node['jobs'] ||
-        !node['instance_id']
+        !node['instance_id'] || !node['instance_type']
         msg = "Error: node layout is missing information #{node}."
         Djinn.log_error(msg)
         raise AppScaleException.new(msg)
       elsif node['public_ip'].empty? || node['private_ip'].empty? ||
-         node['jobs'].empty? || node['instance_id'].empty?
+         node['jobs'].empty? || node['instance_id'].empty? ||
+         node['instance_type'].empty?
         msg = "Error: node layout is missing information #{node}."
         Djinn.log_error(msg)
         raise AppScaleException.new(msg)
@@ -1012,7 +1013,12 @@ class Djinn
 
     @nodes.each { |node|
       if node.jobs.include? 'compute'
-        options['compute_instance_type'] = node.instance_type
+        Djinn.log_warn("NODE: #{node}")
+        Djinn.log_warn("NODE JOBS: #{node.jobs}")
+        Djinn.log_warn("NODE JOBS: #{node.public_ip}")
+        Djinn.log_warn("NODE JOBS: #{node.private_ip}")
+        Djinn.log_warn("NODE JOBS: #{node.instance_id}")
+        Djinn.log_warn("NODE: #{node.to_hash}")
         break
       end
      }

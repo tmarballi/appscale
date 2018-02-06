@@ -69,7 +69,8 @@ class DjinnJobData
       'instance_id' => @instance_id,
       'cloud' => @cloud,
       'ssh_key' => @ssh_key,
-      'disk' => @disk
+      'disk' => @disk,
+      'instance_type' => @instance_type
     }
   end
 
