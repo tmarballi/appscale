@@ -1019,6 +1019,7 @@ class Djinn
         Djinn.log_warn("NODE JOBS: #{node.private_ip}")
         Djinn.log_warn("NODE JOBS: #{node.instance_id}")
         Djinn.log_warn("NODE: #{node.to_hash}")
+        @options['compute_instance_type'] = node.instance_type
         break
       end
      }
