@@ -353,7 +353,6 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     start_time = rl.startTime
     start_time_ms = float(start_time) / 1000
     end_time_ms = float(end_time) / 1000
-    self._pending_requests_applogs[request_id].finish()
 
     # Render app logs:
     try:
