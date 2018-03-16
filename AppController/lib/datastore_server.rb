@@ -27,10 +27,10 @@ module DatastoreServer
   DEFAULT_NUM_SERVERS = 3
 
   # Datastore server processes to core multiplier.
-  MULTIPLIER = 2
+  MULTIPLIER = 3
 
   # The amount of memory in MB that a datastore server can use.
-  MAX_MEMORY = 100
+  MAX_MEMORY = 150
 
   # Starts a Datastore Server on this machine. We don't want to monitor
   # it ourselves, so just tell monit to start it and watch it.
