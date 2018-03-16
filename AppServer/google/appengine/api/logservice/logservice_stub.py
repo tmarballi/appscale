@@ -83,6 +83,8 @@ def _fill_request_log(requestLog, log, include_app_logs):
 class LogServiceStub(apiproxy_stub.APIProxyStub):
   """Python stub for Log Service service."""
 
+  MAX_RETRIES = 5
+
   _LOGSERVER_PATH = '/tmp/.appscale_logserver'
 
   THREADSAFE = True
@@ -134,21 +136,24 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     queue = self._log_server[key]
     queue.put(connection)
 
-  def _send_to_logserver(self, app_id, packet):
-    key, log_server = self._get_log_server(app_id, False)
-    if log_server:
+  def _send_to_logserver(self, app_id, packet, attempts=0):
+    while attempts < self.MAX_RETRIES:
+      key, log_server = self._get_log_server(app_id, True)
       try:
-        log_server.send(packet)
-        self._release_logserver_connection(key, log_server)
-      except socket.error, e:
-        _cleanup_logserver_connection(log_server)
-        self._send_to_logserver(app_id, packet)
+        log_server.sendall(packet)
+        break
+      except socket.error:
+        logging.exception("Failed to send packet")
+        attempts += 1
+
+    self._release_logserver_connection(key, log_server)
+
 
   def _query_log_server(self, app_id, packet):
     key, log_server = self._get_log_server(app_id, True)
     if not log_server:
       raise apiproxy_errors.ApplicationError(
-          log_service_pb.LogServiceError.STORAGE_ERROR)
+        log_service_pb.LogServiceError.STORAGE_ERROR)
     try:
       log_server.send(packet)
       fh = log_server.makefile('rb')
@@ -215,7 +220,7 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     rl.httpVersion = http_version
     rl.userAgent = user_agent
     rl.host = host
-    self._pending_requests_applogs[request_id] = rl.init_resizable_list('appLogs')
+    self._pending_requests_applogs[request_id] = []
 
   @apiproxy_stub.Synchronized
   def end_request(self, request_id, status, response_size, end_time=None):
@@ -238,7 +243,7 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     rl.responseSize = response_size
     rl.endTime = end_time
     rl.finished = 1
-    self._pending_requests_applogs[request_id].finish()
+    rl.appLogs = self._pending_requests_applogs[request_id]
     buf = rl.to_bytes()
     packet = 'l%s%s' % (struct.pack('I', len(buf)), buf)
     self._send_to_logserver(rl.appId, packet)
@@ -253,10 +258,15 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     group = log_service_pb.UserAppLogGroup(request.logs())
     logs = group.log_line_list()
     for log in logs:
-      al = self._pending_requests_applogs[request_id].add()
-      al.time = log.timestamp_usec()
-      al.level = log.level()
-      al.message = log.message()
+      app_logs = self._pending_requests_applogs[request_id]
+      app_log = logging_capnp.AppLog.new_message()
+      app_log.time = log.timestamp_usec()
+      app_log.level = log.level()
+      app_log.message = log.message()
+      app_logs.append(app_log)
+      to_remove = len(app_logs) - 1000
+      for _ in range(to_remove):
+        del app_logs[0]
 
   @apiproxy_stub.Synchronized
   def _Dynamic_Read(self, request, response, request_id):
@@ -269,17 +279,17 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
 
       if request.module_version_size() > 0 and request.version_id_size() > 0:
         raise apiproxy_errors.ApplicationError(
-            log_service_pb.LogServiceError.INVALID_REQUEST)
+          log_service_pb.LogServiceError.INVALID_REQUEST)
       if (request.request_id_size() and
-          (request.has_start_time() or request.has_end_time() or
-           request.has_offset())):
+            (request.has_start_time() or request.has_end_time() or
+               request.has_offset())):
         raise apiproxy_errors.ApplicationError(
-            log_service_pb.LogServiceError.INVALID_REQUEST)
+          log_service_pb.LogServiceError.INVALID_REQUEST)
 
       rl = self._pending_requests.get(request_id, None)
       if rl is None:
         raise apiproxy_errors.ApplicationError(
-            log_service_pb.LogServiceError.INVALID_REQUEST)
+          log_service_pb.LogServiceError.INVALID_REQUEST)
 
       query = logging_capnp.Query.new_message()
       if request.module_version(0).has_module_id():
@@ -322,7 +332,7 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     except:
       logging.exception("Failed to retrieve logs")
       raise apiproxy_errors.ApplicationError(
-          log_service_pb.LogServiceError.INVALID_REQUEST)
+        log_service_pb.LogServiceError.INVALID_REQUEST)
 
   def _Dynamic_SetStatus(self, unused_request, unused_response,
                          unused_request_id):
