@@ -72,6 +72,26 @@ def get_wait_time(retries, args):
   return wait_time
 
 
+def clear_task_name(task_name, retries=3):
+  """ Removes the TaskName entity for a given task.
+
+  Args:
+    task_name: A string specifying the TaskName key.
+    retries: An integer specifying how many times to retry the delete.
+  """
+  task_name_entity = TaskName.get_by_key_name(task_name)
+
+  try:
+    db.delete(task_name_entity)
+  except Exception as error:
+    retries -= 1
+    if retries >= 0:
+      logger.warning('Error deleting task name: {}. Retrying'.format(error))
+      return clear_task_name(task_name, retries)
+
+    raise
+
+
 def execute_task(task, headers, args):
   """ Executes a task to a url with the given args.
 
@@ -111,9 +131,8 @@ def execute_task(task, headers, args):
       logger.error(
         "Task %s with id %s has expired with expiration date %s" % (
          args['task_name'], task.request.id, args['expires']))
-      item = TaskName.get_by_key_name(args['task_name'])
       celery.control.revoke(task.request.id)
-      db.delete(item)
+      clear_task_name(args['task_name'])
       return
 
     if (args['max_retries'] != 0 and
@@ -121,9 +140,8 @@ def execute_task(task, headers, args):
       logger.error("Task %s with id %s has exceeded retries: %s" % (
         args['task_name'], task.request.id,
         args['max_retries']))
-      item = TaskName.get_by_key_name(args['task_name'])
       celery.control.revoke(task.request.id)
-      db.delete(item)
+      clear_task_name(args['task_name'])
       return
     # Targets do not get X-Forwarded-Proto from nginx, they use haproxy port.
     headers['X-Forwarded-Proto'] = url.scheme
@@ -184,8 +202,7 @@ def execute_task(task, headers, args):
 
     if 200 <= response.status < 300:
       # Task successful.
-      item = TaskName.get_by_key_name(args['task_name'])
-      db.delete(item)
+      clear_task_name(args['task_name'])
       time_elapsed = datetime.datetime.utcnow() - start_time
       logger.info(
         '{task} received status {status} from {url} [time elapsed: {te}]'. \
