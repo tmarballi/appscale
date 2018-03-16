@@ -29,6 +29,9 @@ module DatastoreServer
   # Datastore server processes to core multiplier.
   MULTIPLIER = 2
 
+  # The amount of memory in MB that a datastore server can use.
+  MAX_MEMORY = 100
+
   # Starts a Datastore Server on this machine. We don't want to monitor
   # it ourselves, so just tell monit to start it and watch it.
   def self.start(master_ip, db_local_ip, table, verbose = false)
@@ -43,7 +46,8 @@ module DatastoreServer
 
     start_cmd = "#{datastore_server} --type #{table}"
     start_cmd << ' --verbose' if verbose
-    MonitInterface.start(:datastore_server, start_cmd, ports, env_vars)
+    MonitInterface.start(:datastore_server, start_cmd, ports, env_vars,
+                         MAX_MEMORY)
   end
 
   # Stops the Datastore Buffer Server running on this machine. Since it's
