@@ -4239,6 +4239,22 @@ HOSTS
   # If we are in cloud mode, we should mount any volume containing our
   # local state.
   def mount_persistent_storage
+    if my_node.is_db_master? || my_node.is_db_slave? || my_node.is_shadow?
+      unless File.exists?("/mnt/opt")
+        Djinn.log_debug("Mounting /opt to /mnt/opt/")
+        Djinn.log_run("mv /opt /mnt/")
+        Djinn.log_run("ln -s /mnt/opt/ /opt")
+      end
+    end
+
+    #if my_node.is_shadow?
+    #  unless File.exists?("/datadrive/appscale")
+    #   Djinn.log_debug("Mounting /var/log/appscale to /datadrive/appscale")
+    #   Djinn.log_run("mv /var/log/appscale /datadrive/")
+    #    Djinn.log_run("ln -s /datadrive/appscale /var/log/appscale")
+    #  end
+    #end
+
     # If we don't have any disk to attach, we are done.
     unless my_node.disk
       Djinn.log_run("mkdir -p #{PERSISTENT_MOUNT_POINT}/apps")
