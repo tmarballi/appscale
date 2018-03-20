@@ -852,6 +852,7 @@ module HelperFunctions
     elsif handler["secure"] == "non_secure"
       result = "\n    location ~ ^/(?!(#{handler['url']})) {"
       result << "\n\t" << "rewrite #{handler['url']}(.*) https://$host:#{port}$uri redirect;"
+      Djinn.log_warn("NON SECURE LOCATION #{result}")
     else
       return ""
     end
@@ -1161,6 +1162,7 @@ module HelperFunctions
     handlers.map! do |handler|
       if version_key.include? ("dashboard")
         if !handler.key?("static_dir") && !handler.key?("static_files") && !handler.key?('secure')
+          handler['secure'] = 'non_secure'
           secure_handlers[:non_secure] << handler
         end
       end

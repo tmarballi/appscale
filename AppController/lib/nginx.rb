@@ -114,6 +114,16 @@ module Nginx
       HelperFunctions.generate_secure_location_config(handler, http_port)
     }.join
 
+    non_secure_locations = secure_handlers[:non_secure].map { |handler|
+      HelperFunctions.generate_secure_location_config(handler, http_port)
+    }.join
+
+    Djinn.log_warn("SECURE LOCATIONS #{secure_handlers}")
+    Djinn.log_warn("ALWAYS SECURE LOCATIONS #{always_secure_locations}")
+    Djinn.log_warn("NEVER SECURE LOCATIONS #{never_secure_locations}")
+    Djinn.log_warn("NON SECURE LOCATIONS 1 #{secure_handlers[:non_secure]}")
+    Djinn.log_warn("NON SECURE LOCATIONS 2 #{non_secure_locations}")
+
     if secure_handlers[:non_secure]
       always_secure_locations = secure_handlers[:non_secure].map { |handler|
         HelperFunctions.generate_secure_location_config(handler, http_port)
