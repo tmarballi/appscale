@@ -114,6 +114,12 @@ module Nginx
       HelperFunctions.generate_secure_location_config(handler, http_port)
     }.join
 
+    if secure_handlers[:non_secure]
+      always_secure_locations = secure_handlers[:non_secure].map { |handler|
+        HelperFunctions.generate_secure_location_config(handler, http_port)
+      }.join
+    end
+
     secure_static_handlers = []
     non_secure_static_handlers = []
     static_handlers.map { |handler|

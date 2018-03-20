@@ -37,7 +37,6 @@ handlers:
 
 - url: /healthprobe
   script: health_probe.app
-  secure: never
 
 - url: /.*
   script: dashboard.app

@@ -849,6 +849,9 @@ module HelperFunctions
       result << "\n\t" << "rewrite #{handler['url']}(.*) https://$host:#{port}$uri redirect;"
     elsif handler["secure"] == "never"
       result << "\n\t" << "rewrite #{handler['url']}(.*) http://$host:#{port}$uri? redirect;"
+    elsif handler["secure"] == "non_secure"
+      result = "\n    location ~ ^/(?!(#{handler['url']})) {"
+      result << "\n\t" << "rewrite #{handler['url']}(.*) https://$host:#{port}$uri redirect;"
     else
       return ""
     end
@@ -1128,7 +1131,8 @@ module HelperFunctions
 
     secure_handlers = {
         always:  [],
-        never:  []
+        never:  [],
+        non_secure: []
     }
 
     begin
@@ -1155,6 +1159,11 @@ module HelperFunctions
     handlers = tree['handlers']
 
     handlers.map! do |handler|
+      if version_key.include? ("dashboard")
+        if !handler.key?("static_dir") && !handler.key?("static_files") && !handler.key?('secure')
+          secure_handlers[:non_secure] << handler
+        end
+      end
       next unless handler.key?('secure')
 
       if handler['secure'] == 'always'
@@ -1163,6 +1172,8 @@ module HelperFunctions
         secure_handlers[:never] << handler
       end
     end
+    Djinn.log_warn("ALL SECURE HANDLERS #{secure_handlers}")
+    Djinn.log_warn("NON SECURE HANDLERS #{secure_handlers[:non_secure]}")
     secure_handlers
   end
 
