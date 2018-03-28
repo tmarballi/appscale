@@ -117,7 +117,9 @@ def get_sample():
   Returns:
     A list of dictionaries containing keys.
   """
-  sample_output = check_output([NODE_TOOL, 'rangekeysample'])
+  sample_output = check_output(
+    [NODE_TOOL, 'rangekeysample'],
+    env={'MAX_HEAP_SIZE': '1024M', 'HEAP_NEWSIZE': '256M'})
   keys = [{'key': key.strip().decode('hex'), 'size': 0}
           for key in sample_output.splitlines()[1:]]
   sorted(keys, key=lambda key: key['key'])
