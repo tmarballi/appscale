@@ -32,12 +32,23 @@ handlers:
   upload: img/favicon.ico
   mime_type: image/x-icon
 
+- url: /healthcheck
+  script: health_check.app
+
+- url: /healthchecknever
+  script: health_check_never.app
+  secure: never
+
 - url: /download-logs
   static_dir: static/download-logs
 
 - url: /healthprobe
   script: health_probe.app
-  
+
+- url: /healthprobenever
+  script: health_probe_never.app
+  secure: never
+
 - url: /.*
   script: dashboard.app
   secure: always

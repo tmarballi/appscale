@@ -115,48 +115,37 @@ module Nginx
       HelperFunctions.generate_secure_location_config(handler, http_port)
     }.join
 
-    # Here we find all the handlers specified in the app.yaml without a 'secure:'
-    # and with a 'secure: never' field and concat them. We then use the
-    # concatenated string to generate a single location block of the form
-    # 'location ~ ^/(url1|url2)' instead of multiple ones.
-    if !secure_handlers[:non_secure].empty? || !secure_handlers[:never].empty?
-      location_urls = []
+    non_secure_http_locations = secure_handlers[:non_secure].map { |handler|
+      result = "\n    location ~ #{handler['url']} {"
+      result << "\n\t" << "proxy_set_header      X-Real-IP $remote_addr;"
+      result << "\n\t" << "proxy_set_header      X-Forwarded-For $proxy_add_x_forwarded_for;"
+      result << "\n\t" << "proxy_set_header      X-Forwarded-Proto $scheme;"
+      result << "\n\t" << "proxy_set_header      X-Forwarded-Ssl $ssl;"
+      result << "\n\t" << "proxy_set_header      Host $http_host;"
+      result << "\n\t" << "proxy_redirect        off;"
+      result << "\n\t" << "proxy_pass            http://gae_ssl_#{version_key};"
+      result << "\n\t" << "proxy_connect_timeout 600;"
+      result << "\n\t" << "proxy_read_timeout    600;"
+      result << "\n\t" << "client_body_timeout   600;"
+      result << "\n\t" << "client_max_body_size  2G;"
+      result << "\n" << "    }" << "\n"
+    }.join
 
-      # Concatenating all urls for the handlers not specifying a secure field.
-      if !secure_handlers[:non_secure].empty?
-        secure_handlers[:non_secure].map { |handler|
-          handler['url'].slice!(0)
-          url = handler['url']
-          location_urls.push(url)
-        }
-      end
-
-      # Concatenating all urls for the handlers with 'secure: never' field.
-      if !secure_handlers[:never].empty?
-        secure_handlers[:never].map { |handler|
-          handler['url'].slice!(0)
-          url = handler['url']
-          location_urls.push(url)
-        }
-      end
-
-      non_secure_location_urls = location_urls.map { |k| "#{k}" }.join("|")
-      non_secure_http_location = <<NON_SECURE_HTTP_LOCATION
-location ~ ^/(#{non_secure_location_urls}) {
-      proxy_set_header      X-Real-IP $remote_addr;
-      proxy_set_header      X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header      X-Forwarded-Proto $scheme;
-      proxy_set_header      X-Forwarded-Ssl $ssl;
-      proxy_set_header      Host $http_host;
-      proxy_redirect        off;
-      proxy_pass            http://gae_ssl_#{version_key};
-      proxy_connect_timeout 600;
-      proxy_read_timeout    600;
-      client_body_timeout   600;
-      client_max_body_size  2G;
-    }
-NON_SECURE_HTTP_LOCATION
-    end
+    never_secure_http_locations = secure_handlers[:never].map { |handler|
+      result = "\n    location ~ #{handler['url']} {"
+      result << "\n\t" << "proxy_set_header      X-Real-IP $remote_addr;"
+      result << "\n\t" << "proxy_set_header      X-Forwarded-For $proxy_add_x_forwarded_for;"
+      result << "\n\t" << "proxy_set_header      X-Forwarded-Proto $scheme;"
+      result << "\n\t" << "proxy_set_header      X-Forwarded-Ssl $ssl;"
+      result << "\n\t" << "proxy_set_header      Host $http_host;"
+      result << "\n\t" << "proxy_redirect        off;"
+      result << "\n\t" << "proxy_pass            http://gae_ssl_#{version_key};"
+      result << "\n\t" << "proxy_connect_timeout 600;"
+      result << "\n\t" << "proxy_read_timeout    600;"
+      result << "\n\t" << "client_body_timeout   600;"
+      result << "\n\t" << "client_max_body_size  2G;"
+      result << "\n" << "    }" << "\n"
+    }.join
 
     secure_static_handlers = []
     non_secure_static_handlers = []
@@ -269,7 +258,8 @@ server {
     # If they come here using HTTPS, bounce them to the correct scheme.
     error_page 400 http://$host:$server_port$request_uri;
 
-    #{non_secure_http_location}
+    #{non_secure_http_locations}
+    #{never_secure_http_locations}
     #{always_secure_locations}
     #{non_secure_static_locations}
     #{non_secure_default_location}
