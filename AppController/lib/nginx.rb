@@ -115,36 +115,25 @@ module Nginx
       HelperFunctions.generate_secure_location_config(handler, http_port)
     }.join
 
+    http_location_param = \
+        "\n\tproxy_set_header      X-Real-IP $remote_addr;" \
+        "\n\tproxy_set_header      X-Forwarded-For $proxy_add_x_forwarded_for;" \
+        "\n\tproxy_set_header      X-Forwarded-Proto $scheme;" \
+        "\n\tproxy_set_header      X-Forwarded-Ssl $ssl;" \
+        "\n\tproxy_set_header      Host $http_host;\n\tproxy_redirect        off;" \
+        "\n\tproxy_pass            http://gae_ssl_#{version_key};" \
+        "\n\tproxy_connect_timeout 600;\n\tproxy_read_timeout    600;" \
+        "\n\tclient_body_timeout   600;\n\tclient_max_body_size  2G;" \
+        "\n    }\n"
+
     non_secure_http_locations = secure_handlers[:non_secure].map { |handler|
       result = "\n    location ~ #{handler['url']} {"
-      result << "\n\t" << "proxy_set_header      X-Real-IP $remote_addr;"
-      result << "\n\t" << "proxy_set_header      X-Forwarded-For $proxy_add_x_forwarded_for;"
-      result << "\n\t" << "proxy_set_header      X-Forwarded-Proto $scheme;"
-      result << "\n\t" << "proxy_set_header      X-Forwarded-Ssl $ssl;"
-      result << "\n\t" << "proxy_set_header      Host $http_host;"
-      result << "\n\t" << "proxy_redirect        off;"
-      result << "\n\t" << "proxy_pass            http://gae_ssl_#{version_key};"
-      result << "\n\t" << "proxy_connect_timeout 600;"
-      result << "\n\t" << "proxy_read_timeout    600;"
-      result << "\n\t" << "client_body_timeout   600;"
-      result << "\n\t" << "client_max_body_size  2G;"
-      result << "\n" << "    }" << "\n"
+      result << http_location_param
     }.join
 
     never_secure_http_locations = secure_handlers[:never].map { |handler|
       result = "\n    location ~ #{handler['url']} {"
-      result << "\n\t" << "proxy_set_header      X-Real-IP $remote_addr;"
-      result << "\n\t" << "proxy_set_header      X-Forwarded-For $proxy_add_x_forwarded_for;"
-      result << "\n\t" << "proxy_set_header      X-Forwarded-Proto $scheme;"
-      result << "\n\t" << "proxy_set_header      X-Forwarded-Ssl $ssl;"
-      result << "\n\t" << "proxy_set_header      Host $http_host;"
-      result << "\n\t" << "proxy_redirect        off;"
-      result << "\n\t" << "proxy_pass            http://gae_ssl_#{version_key};"
-      result << "\n\t" << "proxy_connect_timeout 600;"
-      result << "\n\t" << "proxy_read_timeout    600;"
-      result << "\n\t" << "client_body_timeout   600;"
-      result << "\n\t" << "client_max_body_size  2G;"
-      result << "\n" << "    }" << "\n"
+      result << http_location_param
     }.join
 
     secure_static_handlers = []
