@@ -20,22 +20,118 @@
 import base64
 import capnp # pylint: disable=unused-import
 import logging
+
+import json
 import logging_capnp
 import socket
 import struct
 import time
 
-
 from collections import defaultdict
+
+import os
+
+from datetime import datetime
+
+import multiprocessing
+
+import threading
 from google.appengine.api import apiproxy_stub
 from google.appengine.api.logservice import log_service_pb
+from google.appengine.api.modules import (
+  get_current_module_name, get_current_version_name
+)
 from google.appengine.runtime import apiproxy_errors
-from Queue import Queue, Empty
+from Queue import Queue, Empty, Full
 
 # Add path to import file_io
 from appscale.common import file_io
 
+
 _I_SIZE = struct.calcsize('I')
+
+LEVELS = {
+  0: 'DEBUG',
+  1: 'INFO',
+  2: 'WARNING',
+  3: 'ERROR',
+  4: 'CRITICAL',
+}
+
+
+class RequestsLogger(threading.Thread):
+
+  FILENAME_TEMPLATE = (
+    '/opt/appscale/logserver/requests-{app}-{service}-{version}-{port}.log'
+  )
+  QUEUE_SIZE = 1024 * 16
+
+  def __init__(self):
+    super(RequestsLogger, self).__init__()
+    self.setDaemon(True)
+    self._logs_queue = multiprocessing.Queue(self.QUEUE_SIZE)
+    self._log_file = None
+    self._shutting_down = False
+
+  def _open_log_file(self, request_info):
+    # Init logger lazily when application info is available
+    app_id = request_info['appId']
+    service_id = request_info['serviceName']
+    version_id = request_info['versionName']
+    port = request_info['port']
+    # Prepare filename
+    filename = self.FILENAME_TEMPLATE.format(
+      app=app_id, service=service_id, version=version_id, port=port)
+    # Open log file
+    self._log_file = open(filename, 'a')
+
+  def run(self):
+    request_info = None
+    while True:
+      try:
+        try:
+          if not request_info:
+            # Get new info from the queue if previous has been saved
+            request_info = self._logs_queue.get()
+          if not request_info and self._shutting_down:
+            return
+          if not self._log_file:
+            self._open_log_file(request_info)
+          json.dump(request_info, self._log_file)
+          self._log_file.write('\n')
+          self._log_file.flush()
+          request_info = None
+
+        except (OSError, IOError):
+          # Close file to reopen it again later
+          logging.exception(
+            'Failed to write request_info to log file\n  Request info: {}'
+            .format(request_info or "-"))
+          log_file = self._log_file
+          self._log_file = None
+          log_file.close()
+          time.sleep(5)
+
+        except Exception:
+          logging.exception(
+            'Failed to write request_info to log file\n  Request info: {}'
+            .format(request_info or "-"))
+          time.sleep(5)
+
+      except Exception:
+        # There were cases where exception was thrown at writing error
+        pass
+
+  def stop(self):
+    self._shutting_down = True
+    self._logs_queue.put(None)
+
+  def write(self, requests_info):
+    try:
+      # Put an item on the queue if a free slot is immediately available
+      self._logs_queue.put(requests_info, block=False)
+    except Full:
+      logging.error('Request logs queue is crowded')
 
 
 def _cleanup_logserver_connection(connection):
@@ -80,8 +176,11 @@ def _fill_request_log(requestLog, log, include_app_logs):
       line.set_level(appLog.level)
       line.set_log_message(appLog.message)
 
+
 class LogServiceStub(apiproxy_stub.APIProxyStub):
   """Python stub for Log Service service."""
+
+  MAX_RETRIES = 5
 
   _LOGSERVER_PATH = '/tmp/.appscale_logserver'
 
@@ -112,6 +211,15 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     #get head node_private ip from /etc/appscale/head_node_private_ip
     self._log_server_ip = file_io.read("/etc/appscale/head_node_private_ip").rstrip()
 
+    self._requests_logger = RequestsLogger()
+    self._requests_logger.start()
+
+  def stop_requests_logger(self):
+    self._requests_logger.stop()
+
+  def is_requests_logger_alive(self):
+    return self._requests_logger.is_alive()
+
   def _get_log_server(self, app_id, blocking):
     key = (blocking, app_id)
     queue = self._log_server[key]
@@ -134,21 +242,24 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     queue = self._log_server[key]
     queue.put(connection)
 
-  def _send_to_logserver(self, app_id, packet):
-    key, log_server = self._get_log_server(app_id, False)
-    if log_server:
+  def _send_to_logserver(self, app_id, packet, attempts=0):
+    while attempts < self.MAX_RETRIES:
+      key, log_server = self._get_log_server(app_id, True)
       try:
-        log_server.send(packet)
-        self._release_logserver_connection(key, log_server)
-      except socket.error, e:
-        _cleanup_logserver_connection(log_server)
-        self._send_to_logserver(app_id, packet)
+        log_server.sendall(packet)
+        break
+      except socket.error:
+        logging.exception("Failed to send packet")
+        attempts += 1
+
+    self._release_logserver_connection(key, log_server)
+
 
   def _query_log_server(self, app_id, packet):
     key, log_server = self._get_log_server(app_id, True)
     if not log_server:
       raise apiproxy_errors.ApplicationError(
-          log_service_pb.LogServiceError.STORAGE_ERROR)
+        log_service_pb.LogServiceError.STORAGE_ERROR)
     try:
       log_server.send(packet)
       fh = log_server.makefile('rb')
@@ -215,7 +326,7 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     rl.httpVersion = http_version
     rl.userAgent = user_agent
     rl.host = host
-    self._pending_requests_applogs[request_id] = rl.init_resizable_list('appLogs')
+    self._pending_requests_applogs[request_id] = []
 
   @apiproxy_stub.Synchronized
   def end_request(self, request_id, status, response_size, end_time=None):
@@ -237,7 +348,59 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     rl.status = status
     rl.responseSize = response_size
     rl.endTime = end_time
-    self._pending_requests_applogs[request_id].finish()
+    rl.finished = 1
+    rl.appLogs = self._pending_requests_applogs[request_id]
+    start_time = rl.startTime
+    start_time_ms = float(start_time) / 1000
+    end_time_ms = float(end_time) / 1000
+
+    # Render app logs:
+    try:
+      app_logs_str = u'\n'.join([
+        u'{} {} {}'.format(
+          LEVELS[log.level],
+          datetime.utcfromtimestamp(log.time/1000000)
+            .strftime('%Y-%m-%d %H:%M:%S'),
+          log.message
+        )
+        for log in rl.appLogs
+      ])
+    except UnicodeError:
+      app_logs_str = u'\n'.join([
+        u'{} {} {}'.format(
+          LEVELS[log.level],
+          datetime.utcfromtimestamp(log.time/1000000)
+            .strftime('%Y-%m-%d %H:%M:%S'),
+          unicode(log.message, 'ascii', 'ignore')
+        )
+        for log in rl.appLogs
+      ])
+
+    request_info = {
+      'generated_id': '{}-{}'.format(start_time, request_id),
+      'serviceName': get_current_module_name(),
+      'versionName': get_current_version_name(),
+      'startTime': start_time_ms,
+      'endTime': end_time_ms,
+      'latency': int(end_time_ms - start_time_ms),
+      'level': max(0, 0, *[
+         log.level for log in rl.appLogs
+       ]),
+      'appId': rl.appId,
+      'appscale-host': os.environ['MY_IP_ADDRESS'],
+      'port': int(os.environ['MY_PORT']),
+      'ip': rl.ip,
+      'method': rl.method,
+      'requestId': request_id,
+      'resource': rl.resource,
+      'responseSize': rl.responseSize,
+      'status': rl.status,
+      'userAgent': rl.userAgent,
+      'appLogs': app_logs_str
+    }
+
+    self._requests_logger.write(request_info)
+
     buf = rl.to_bytes()
     packet = 'l%s%s' % (struct.pack('I', len(buf)), buf)
     self._send_to_logserver(rl.appId, packet)
@@ -252,10 +415,15 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     group = log_service_pb.UserAppLogGroup(request.logs())
     logs = group.log_line_list()
     for log in logs:
-      al = self._pending_requests_applogs[request_id].add()
-      al.time = log.timestamp_usec()
-      al.level = log.level()
-      al.message = log.message()
+      app_logs = self._pending_requests_applogs[request_id]
+      app_log = logging_capnp.AppLog.new_message()
+      app_log.time = log.timestamp_usec()
+      app_log.level = log.level()
+      app_log.message = log.message()
+      app_logs.append(app_log)
+      to_remove = len(app_logs) - 1000
+      for _ in range(to_remove):
+        del app_logs[0]
 
   @apiproxy_stub.Synchronized
   def _Dynamic_Read(self, request, response, request_id):
@@ -268,17 +436,17 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
 
       if request.module_version_size() > 0 and request.version_id_size() > 0:
         raise apiproxy_errors.ApplicationError(
-            log_service_pb.LogServiceError.INVALID_REQUEST)
+          log_service_pb.LogServiceError.INVALID_REQUEST)
       if (request.request_id_size() and
-          (request.has_start_time() or request.has_end_time() or
-           request.has_offset())):
+            (request.has_start_time() or request.has_end_time() or
+               request.has_offset())):
         raise apiproxy_errors.ApplicationError(
-            log_service_pb.LogServiceError.INVALID_REQUEST)
+          log_service_pb.LogServiceError.INVALID_REQUEST)
 
       rl = self._pending_requests.get(request_id, None)
       if rl is None:
         raise apiproxy_errors.ApplicationError(
-            log_service_pb.LogServiceError.INVALID_REQUEST)
+          log_service_pb.LogServiceError.INVALID_REQUEST)
 
       query = logging_capnp.Query.new_message()
       if request.module_version(0).has_module_id():
@@ -321,7 +489,7 @@ class LogServiceStub(apiproxy_stub.APIProxyStub):
     except:
       logging.exception("Failed to retrieve logs")
       raise apiproxy_errors.ApplicationError(
-          log_service_pb.LogServiceError.INVALID_REQUEST)
+        log_service_pb.LogServiceError.INVALID_REQUEST)
 
   def _Dynamic_SetStatus(self, unused_request, unused_response,
                          unused_request_id):

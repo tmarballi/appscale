@@ -601,7 +601,7 @@ class Module(object):
           environ['PATH_INFO'])
       environ['REQUEST_ID_HASH'] = self.generate_request_id_hash()
       if should_log_request:
-        environ['REQUEST_LOG_ID'] = self.generate_request_log_id()
+        environ['REQUEST_LOG_ID'] = request_id
         if 'HTTP_HOST' in environ:
           hostname = environ['HTTP_HOST']
         elif environ['SERVER_PORT'] == '80':
@@ -642,13 +642,14 @@ class Module(object):
           logservice.end_request(request_id, status_code, content_length)
           logging.info('%(module_name)s: '
                        '"%(method)s %(resource)s %(http_version)s" '
-                       '%(status)d %(content_length)s',
+                       '%(status)d %(content_length)s %(request_id)s',
                        {'module_name': self.name,
                         'method': method,
                         'resource': resource,
                         'http_version': http_version,
                         'status': status_code,
-                        'content_length': content_length or '-'})
+                        'content_length': content_length or '-',
+                        'request_id': request_id})
         return start_response(status, response_headers, exc_info)
 
       if (environ['REQUEST_METHOD'] in ('GET', 'HEAD', 'TRACE') and
