@@ -889,8 +889,9 @@ class DistributedTaskQueue():
       queue = self.get_queue(app_id, request.queue_name())
     except QueueNotFound as error:
       return '', TaskQueueServiceError.UNKNOWN_QUEUE, str(error)
-
-    task_info = {'id': request.task_name()}
+    
+    task_info = {'id': request.task_name(),
+                 'leaseTimestamp': request.eta_usec()}
     try:
       # The Python AppServer sets eta_usec with a resolution of 1 second,
       # so update_lease can't be used. It checks with millisecond precision.
