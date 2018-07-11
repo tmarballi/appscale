@@ -22,6 +22,7 @@ from appscale.hermes.stats.producers import (
 httpclient.AsyncHTTPClient.configure(SimpleAsyncHTTPClient, max_clients=100)
 
 
+
 class BadStatsListFormat(ValueError):
   """ Is used when Hermes slave responds with improperly formatted stats. """
   pass
