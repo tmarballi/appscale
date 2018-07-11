@@ -2671,7 +2671,7 @@ class DatastoreDistributed():
 
     return filtered_entities
 
-  def __extract_value_from_index(self, index_entry, direction):
+  def _extract_value_from_index(self, index_entry, direction):
     """ Takes an index entry and returns the value of the property.
 
     This function is for single property indexes only.
