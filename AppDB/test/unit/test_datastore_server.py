@@ -369,7 +369,7 @@ class TestDatastoreServer(unittest.TestCase):
 
     db_batch.should_receive('batch_get_entity').and_return(
       {entity_key1: {}, entity_key2: {}})
-    db_batch.should_receive('normal_batch')
+    db_batch.should_receive('batch_mutate')
     transaction_manager = flexmock(
       create_transaction_id=lambda project, xg: 1,
       delete_transaction_id=lambda project, txid: None,
@@ -409,7 +409,7 @@ class TestDatastoreServer(unittest.TestCase):
 
     db_batch.should_receive('batch_get_entity').and_return(
       {entity_key1: {}, entity_key2: {}})
-    db_batch.should_receive('normal_batch')
+    db_batch.should_receive('batch_mutate')
     transaction_manager = flexmock(
       create_transaction_id=lambda project, xg: 1,
       delete_transaction_id=lambda project, txid: None,
@@ -488,7 +488,8 @@ class TestDatastoreServer(unittest.TestCase):
     db_batch = flexmock()
     db_batch.should_receive('valid_data_version').and_return(True)
     db_batch.should_receive("batch_get_entity").and_return(row_values)
-    db_batch.should_receive('normal_batch')
+    db_batch.should_receive('batch_mutate')
+    db_batch.should_receive('_normal_batch')
 
     transaction_manager = flexmock()
     dd = DatastoreDistributed(db_batch, transaction_manager, zookeeper)
@@ -1067,7 +1068,7 @@ class TestDatastoreServer(unittest.TestCase):
     prefix = dd.get_table_prefix(entity)
     entity_key = get_entity_key(prefix, entity.key().path())
     db_batch.should_receive('batch_get_entity').and_return({entity_key: {}})
-    db_batch.should_receive('normal_batch')
+    db_batch.should_receive('batch_mutate')
 
     entity_lock = flexmock(EntityLock)
     entity_lock.should_receive('acquire')
