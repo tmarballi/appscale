@@ -2672,7 +2672,7 @@ class DatastoreDistributed():
 
     return filtered_entities
 
-  def _extract_value_from_index(self, index_entry, direction):
+  def __extract_value_from_index(self, index_entry, direction):
     """ Takes an index entry and returns the value of the property.
 
     This function is for single property indexes only.
@@ -2778,7 +2778,7 @@ class DatastoreDistributed():
 
     return cleaned_results
 
-  def __extract_entities_from_composite_indexes(self, query, index_result):
+  def _extract_entities_from_composite_indexes(self, query, index_result):
     """ Takes index values and creates partial entities out of them.
  
     This is required for projection queries where the query specifies certain
