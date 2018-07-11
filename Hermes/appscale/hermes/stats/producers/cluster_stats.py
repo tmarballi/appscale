@@ -21,8 +21,6 @@ from appscale.hermes.stats.producers import (
 # Allow tornado to fetch up to 100 concurrent requests.
 httpclient.AsyncHTTPClient.configure(SimpleAsyncHTTPClient, max_clients=100)
 
-
-
 class BadStatsListFormat(ValueError):
   """ Is used when Hermes slave responds with improperly formatted stats. """
   pass
