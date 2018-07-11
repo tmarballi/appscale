@@ -13,6 +13,7 @@ import uuid
 
 from appscale.common import appscale_info
 from appscale.common.constants import SCHEMA_CHANGE_TIMEOUT
+from appscale.common.retrying import retry
 from appscale.common.unpackaged import APPSCALE_PYTHON_APPSERVER
 from cassandra.cluster import Cluster
 from cassandra.concurrent import execute_concurrent
@@ -21,8 +22,7 @@ from cassandra.query import ConsistencyLevel
 from cassandra.query import SimpleStatement
 from cassandra.query import ValueSequence
 from .constants import CURRENT_VERSION
-from .large_batch import (FailedBatch,
-                          LargeBatch)
+from .large_batch import BatchNotApplied, FailedBatch, LargeBatch
 from .retry_policies import (BASIC_RETRIES,
                              NO_RETRIES)
 from .. import dbconstants
@@ -277,7 +277,7 @@ class DatastoreProxy(AppDBInterface):
 
     return self.prepared_statements[statement]
 
-  def _normal_batch(self, mutations, txid):
+  def normal_batch(self, mutations, txid):
     """ Use Cassandra's native batch statement to apply mutations atomically.
 
     Args:
@@ -324,7 +324,7 @@ class DatastoreProxy(AppDBInterface):
     try:
       self.session.execute(batch)
     except dbconstants.TRANSIENT_CASSANDRA_ERRORS:
-      message = 'Exception during batch_mutate'
+      message = 'Unable to apply batch'
       logging.exception(message)
       raise AppScaleDBConnectionError(message)
 
@@ -383,7 +383,7 @@ class DatastoreProxy(AppDBInterface):
     execute_concurrent(self.session, statements_and_params,
                        raise_on_first_error=True)
 
-  def _large_batch(self, app, mutations, entity_changes, txn):
+  def large_batch(self, app, mutations, entity_changes, txn):
     """ Insert or delete multiple rows across tables in an atomic statement.
 
     Args:
@@ -401,7 +401,7 @@ class DatastoreProxy(AppDBInterface):
     try:
       large_batch.start()
     except FailedBatch as batch_error:
-      raise AppScaleDBConnectionError(str(batch_error))
+      raise BatchNotApplied(str(batch_error))
 
     insert_item = """
       INSERT INTO batches (app, transaction, namespace, path,
@@ -430,15 +430,23 @@ class DatastoreProxy(AppDBInterface):
     except dbconstants.TRANSIENT_CASSANDRA_ERRORS:
       message = 'Unable to write large batch log'
       logging.exception(message)
-      raise AppScaleDBConnectionError(message)
+      raise BatchNotApplied(message)
 
+    # Since failing after this point is expensive and time consuming, retry
+    # operations to make a failure less likely.
+    custom_retry = retry(
+      backoff_threshold=5, retrying_timeout=10,
+      retry_on_exception=dbconstants.TRANSIENT_CASSANDRA_ERRORS)
+
+    persistent_apply_batch = custom_retry(large_batch.set_applied)
     try:
-      large_batch.set_applied()
+      persistent_apply_batch()
     except FailedBatch as batch_error:
       raise AppScaleDBConnectionError(str(batch_error))
 
+    persistent_apply_mutations = custom_retry(self.apply_mutations)
     try:
-      self.apply_mutations(mutations, txn)
+      persistent_apply_mutations(mutations, txn)
     except dbconstants.TRANSIENT_CASSANDRA_ERRORS:
       message = 'Exception during large batch'
       logging.exception(message)
@@ -459,21 +467,6 @@ class DatastoreProxy(AppDBInterface):
       self.session.execute(clear_batch, parameters)
     except dbconstants.TRANSIENT_CASSANDRA_ERRORS:
       logging.exception('Unable to clear batch log')
-
-  def batch_mutate(self, app, mutations, entity_changes, txn):
-    """ Insert or delete multiple rows across tables in an atomic statement.
-
-    Args:
-      app: A string containing the application ID.
-      mutations: A list of dictionaries representing mutations.
-      entity_changes: A list of changes at the entity level.
-      txn: A transaction ID handler.
-    """
-    size = batch_size(mutations)
-    if size > LARGE_BATCH_THRESHOLD:
-      self._large_batch(app, mutations, entity_changes, txn)
-    else:
-      self._normal_batch(mutations, txn)
 
   def batch_delete(self, table_name, row_keys, column_names=()):
     """
