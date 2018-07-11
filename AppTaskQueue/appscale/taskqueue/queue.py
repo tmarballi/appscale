@@ -19,6 +19,7 @@ from threading import Lock
 from .constants import AGE_LIMIT_REGEX
 from .constants import InvalidQueueConfiguration
 from .constants import RATE_REGEX
+from .constants import TaskNotFound
 from .task import InvalidTaskInfo
 from .task import Task
 from .utils import logger
@@ -674,7 +675,7 @@ class PullQueue(Queue):
     try:
       result = self.db_access.session.execute(select_statement, parameters)[0]
     except IndexError:
-      return False
+      raise TaskNotFound('Task does not exist: {}'.format(task_id))
 
     return result.op_id == op_id
 
@@ -710,8 +711,13 @@ class PullQueue(Queue):
 
     if result.was_applied:
       return
-
-    if not self._task_mutated_by_id(parameters['id'], parameters['op_id']):
+    
+    try:
+      success = self._task_mutated_by_id(parameters['id'], parameters['op_id'])
+    except TaskNotFound:
+      raise TransientError('Unable to insert task')
+    
+    if not success:
       raise InvalidTaskInfo(
         'Task name already taken: {}'.format(parameters['id']))
 
@@ -755,8 +761,26 @@ class PullQueue(Queue):
     if result.was_applied:
       logger.debug(success_message)
       return
-
+    
     if not self._task_mutated_by_id(parameters['id'], parameters['op_id']):
+      select_statement = SimpleStatement("""
+        SELECT lease_expires FROM pull_queue_tasks
+        WHERE app = %(app)s AND queue = %(queue)s AND id = %(id)s
+      """, consistency_level=ConsistencyLevel.SERIAL)
+      parameters = {
+        'app': self.app,
+        'queue': self.name,
+        'id': parameters['id']
+      }
+      try:
+        result = self.db_access.session.execute(select_statement, parameters)[0]
+      except IndexError:
+        raise TaskNotFound('Task does not exist: {}'.format(parameters['id']))
+
+      logger.debug(
+        'Lease already expired on task: {} '
+        '(lease_expires = {})'.format(parameters['id'], result.lease_expires))
+
       raise InvalidLeaseRequest('The task lease has expired.')
     
     logger.debug(success_message)
