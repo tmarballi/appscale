@@ -18,7 +18,7 @@ from appscale.hermes.stats.producers import (
   proxy_stats, node_stats, process_stats, rabbitmq_stats
 )
 
-# Allow tornado to fetch up to 100 concurrent requests
+# Allow tornado to fetch up to 100 concurrent requests.
 httpclient.AsyncHTTPClient.configure(SimpleAsyncHTTPClient, max_clients=100)
 
 
