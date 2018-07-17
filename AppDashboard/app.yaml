@@ -38,8 +38,23 @@ handlers:
 - url: /healthprobe
   script: health_probe.app
   
+- url: /healthcheck
+  script: health_check.app
+
+- url: /neversecure1
+  script: never_secure1.app
+  secure: never
+
+- url: /neversecure2
+  script: never_secure2.app
+  secure: never
+
 - url: /.*
   script: dashboard.app
+  secure: always
+
+- url: /alwayssecure
+  script: always_secure.app
   secure: always
 
 libraries:
