@@ -303,7 +303,7 @@ installgems()
     sleep 1
     gem install json ${GEMOPT} -v 1.8.3
     sleep 1
-    gem install soap4r-ng ${GEMOPT}
+    gem install soap4r-ng ${GEMOPT} -v 2.0.3
     gem install httparty ${GEMOPT} -v 0.14.0
     gem install httpclient ${GEMOPT}
     gem install posixpsutil ${GEMOPT}
@@ -333,10 +333,10 @@ installsolr()
 
 installcassandra()
 {
-    CASSANDRA_VER=3.11.0
+    CASSANDRA_VER=3.11.2
 
     CASSANDRA_PACKAGE="apache-cassandra-${CASSANDRA_VER}-bin.tar.gz"
-    CASSANDRA_PACKAGE_MD5="96c72922df1170b4b5dec81b27d451fa"
+    CASSANDRA_PACKAGE_MD5="1c1bc0b216f308500e219968acbd625e"
     cachepackage ${CASSANDRA_PACKAGE} ${CASSANDRA_PACKAGE_MD5}
 
     # Remove old Cassandra environment directory.
