@@ -19,6 +19,7 @@ from threading import Lock
 from .constants import AGE_LIMIT_REGEX
 from .constants import InvalidQueueConfiguration
 from .constants import RATE_REGEX
+from .constants import TaskNotFound
 from .task import InvalidTaskInfo
 from .task import Task
 from .utils import logger
@@ -380,6 +381,8 @@ class PullQueue(Queue):
     if task is not None:
       self._delete_task_and_index(task)
 
+    logger.debug('Deleted task: {}'.format(task))
+
   def update_lease(self, task, new_lease_seconds, retries=5):
     """ Updates the duration of a task lease.
 
@@ -561,6 +564,7 @@ class PullQueue(Queue):
 
     time_elapsed = datetime.datetime.utcnow() - start_time
     logger.debug('Leased {} tasks [time elapsed: {}]'.format(len(leased), str(time_elapsed)))
+    logger.debug('IDs leased: {}'.format([task.id for task in leased]))
     return leased
 
   def total_tasks(self):
@@ -674,7 +678,7 @@ class PullQueue(Queue):
     try:
       result = self.db_access.session.execute(select_statement, parameters)[0]
     except IndexError:
-      return False
+      raise TaskNotFound('Task does not exist: {}'.format(task_id))
 
     return result.op_id == op_id
 
@@ -711,7 +715,12 @@ class PullQueue(Queue):
     if result.was_applied:
       return
 
-    if not self._task_mutated_by_id(parameters['id'], parameters['op_id']):
+    try:
+      success = self._task_mutated_by_id(parameters['id'], parameters['op_id'])
+    except TaskNotFound:
+      raise TransientError('Unable to insert task')
+
+    if not success:
       raise InvalidTaskInfo(
         'Task name already taken: {}'.format(parameters['id']))
 
@@ -757,6 +766,24 @@ class PullQueue(Queue):
       return
 
     if not self._task_mutated_by_id(parameters['id'], parameters['op_id']):
+      select_statement = SimpleStatement("""
+              SELECT lease_expires FROM pull_queue_tasks
+              WHERE app = %(app)s AND queue = %(queue)s AND id = %(id)s
+            """, consistency_level=ConsistencyLevel.SERIAL)
+      parameters = {
+        'app': self.app,
+        'queue': self.name,
+        'id': parameters['id']
+      }
+      try:
+        result = self.db_access.session.execute(select_statement, parameters)[0]
+      except IndexError:
+        raise TaskNotFound('Task does not exist: {}'.format(parameters['id']))
+
+      logger.debug(
+        'Lease already expired on task: {} '
+        '(lease_expires = {})'.format(parameters['id'], result.lease_expires))
+
       raise InvalidLeaseRequest('The task lease has expired.')
 
     logger.debug(success_message)
