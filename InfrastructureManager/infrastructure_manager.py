@@ -322,6 +322,13 @@ class InfrastructureManager:
     return self.__generate_response(True, self.REASON_NONE,
       {'location' : disk_location})
 
+  def __describe_vms(self, agent, parameters):
+    try:
+      return agent.describe_instances(parameters)
+    except (AgentConfigurationException, AgentRuntimeException) as exception:
+      utils.log('Agent call to describe instances failed with {0}'.format(
+        str(exception)))
+      return [], [], []
 
   def __spawn_vms(self, agent, num_vms, parameters, reservation_id):
     """
@@ -334,8 +341,9 @@ class InfrastructureManager:
       reservation_id  Reservation ID of the current run request
     """
     status_info = self.reservations.get(reservation_id)
+    
     active_public_ips, active_private_ips, active_instances = \
-      agent.describe_instances(parameters)
+    self.__describe_vms(agent, parameters)
 
     try:
       security_configured = agent.configure_instance_security(parameters)
@@ -354,9 +362,11 @@ class InfrastructureManager:
           reservation_id))
     except (AgentConfigurationException, AgentRuntimeException) as exception:
       # Check if we have had partial success starting instances.
-      public_ips, private_ips, instance_ids = agent.describe_instances(
-        parameters)
+      public_ips, private_ips, instance_ids = \
+        self.__describe_vms(agent, parameters)
+
       public_ips = agent.diff(public_ips, active_public_ips)
+      
       if public_ips:
         private_ips = agent.diff(private_ips, active_private_ips)
         instance_ids = agent.diff(instance_ids, active_instances)
