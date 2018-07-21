@@ -25,7 +25,7 @@ from appscale.common.monit_app_configuration import MONIT_CONFIG_DIR
 from .utils import ensure_path
 
 # The number of tasks the Celery worker can handle at a time.
-CELERY_CONCURRENCY = 100
+CELERY_CONCURRENCY = 50
 
 # The directory where Celery configuration files are stored.
 CELERY_CONFIG_DIR = os.path.join(CONFIG_DIR, 'celery', 'configuration')
