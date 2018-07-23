@@ -2149,6 +2149,7 @@ class DatastoreDistributed():
          
     return []
 
+  @staticmethod
   def _common_refs_from_ranges(ranges, limit):
     """ Find common entries across multiple index ranges.
     Args:
