@@ -1103,6 +1103,7 @@ class PullQueue(Queue):
     Args:
       eta: A datetime object.
       task_id: A string containing the task ID.
+      tag: A string containing the task tag.
     """
     delete_eta_index = """
       DELETE FROM pull_queue_tasks_index
