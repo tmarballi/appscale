@@ -343,7 +343,7 @@ class InfrastructureManager:
     status_info = self.reservations.get(reservation_id)
     
     active_public_ips, active_private_ips, active_instances = \
-    self.__describe_vms(agent, parameters)
+      self.__describe_vms(agent, parameters)
 
     try:
       security_configured = agent.configure_instance_security(parameters)
