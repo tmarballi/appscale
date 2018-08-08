@@ -1081,12 +1081,12 @@ class PullQueue(Queue):
     self.db_access.session.execute(delete_eta_index, parameters)
 
     delete_tag_index = """
-          DELETE FROM pull_queue_tags_index
-          WHERE app = %(app)s
-          AND queue = %(queue)s
-          AND tag = %(tag)s
-          AND eta = %(eta)s
-          AND id = %(id)s
+      DELETE FROM pull_queue_tags_index
+      WHERE app = %(app)s
+      AND queue = %(queue)s
+      AND tag = %(tag)s
+      AND eta = %(eta)s
+      AND id = %(id)s
     """
     parameters = {'app': self.app, 'queue': self.name, 'tag': tag, 'eta': eta,
                   'id': task_id}
