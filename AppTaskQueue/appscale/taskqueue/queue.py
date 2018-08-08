@@ -1038,8 +1038,8 @@ class PullQueue(Queue):
       tag = ''
 
     statement = """
-          INSERT INTO pull_queue_tasks_index (app, queue, eta, id, tag)
-          VALUES (?, ?, ?, ?, ?)
+      INSERT INTO pull_queue_tasks_index (app, queue, eta, id, tag)
+      VALUES (?, ?, ?, ?, ?)
     """
     if statement not in self.prepared_statements:
       self.prepared_statements[statement] = session.prepare(statement)
@@ -1049,8 +1049,8 @@ class PullQueue(Queue):
     update_index.add(create_new_eta_index, parameters)
 
     statement = """
-          INSERT INTO pull_queue_tags_index (app, queue, tag, eta, id)
-          VALUES (?, ?, ?, ?, ?)
+      INSERT INTO pull_queue_tags_index (app, queue, tag, eta, id)
+      VALUES (?, ?, ?, ?, ?)
     """
     if statement not in self.prepared_statements:
       self.prepared_statements[statement] = session.prepare(statement)
