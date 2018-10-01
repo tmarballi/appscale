@@ -64,6 +64,7 @@ NO_RETRIES = FallthroughRetryPolicy()
 
 def rebuild_task_indexes(session):
   """ Creates index entries for all pull queue tasks.
+  
   Args:
     session: A cassandra-driver session.
   """
@@ -72,18 +73,18 @@ def rebuild_task_indexes(session):
   total_tasks = 0
   app = ''
   queue = ''
-  id = ''
+  id_ = ''
   while True:
     results = session.execute("""
       SELECT app, queue, id, lease_expires, tag FROM pull_queue_tasks
       WHERE token(app, queue, id) > token(%(app)s, %(queue)s, %(id)s)
       LIMIT {}
-    """.format(batch_size), {'app': app, 'queue': queue, 'id': id})
+    """.format(batch_size), {'app': app, 'queue': queue, 'id': id_})
     results_list = list(results)
     for result in results_list:
       parameters = {'app': result.app, 'queue': result.queue,
                     'eta': result.lease_expires, 'id': result.id,
-                    'tag': result.tag}
+                    'tag': result.tag or ''}
 
       insert_eta_index = SimpleStatement("""
         INSERT INTO pull_queue_tasks_index (app, queue, eta, id, tag)
@@ -103,7 +104,7 @@ def rebuild_task_indexes(session):
 
     app = results_list[-1].app
     queue = results_list[-1].queue
-    id = results_list[-1].id
+    id_ = results_list[-1].id
 
   logger.info('Created entries for {} tasks'.format(total_tasks))
 
@@ -154,7 +155,7 @@ def create_pull_queue_tables(cluster, session):
 
   rebuild_indexes = False
   if ('pull_queue_tasks_index' in keyspace_metadata.tables and
-          'tag_exists' in keyspace_metadata.tables['pull_queue_tasks_index'].columns):
+      'tag_exists' in keyspace_metadata.tables['pull_queue_tasks_index'].columns):
     rebuild_indexes = True
     logger.info('Dropping outdated pull_queue_tags index')
     session.execute('DROP INDEX IF EXISTS pull_queue_tags',
@@ -964,10 +965,9 @@ class DistributedTaskQueue():
       # The response requires ETA to be set before encoding.
       response.set_updated_eta_usec(0)
       return response.Encode(), error, str(lease_error)
-
     except TaskNotFound as error:
       return '', TaskQueueServiceError.UNKNOWN_TASK, str(error)
-
+ 
     epoch = datetime.datetime.utcfromtimestamp(0)
     updated_usec = int((task.leaseTimestamp - epoch).total_seconds() * 1000000)
     response.set_updated_eta_usec(updated_usec)

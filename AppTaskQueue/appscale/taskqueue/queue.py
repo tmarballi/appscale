@@ -316,8 +316,8 @@ class PullQueue(Queue):
       tag = ''
 
     insert_eta_index = SimpleStatement("""
-      INSERT INTO pull_queue_tasks_index (app, queue, eta, id, tag)
-      VALUES (%(app)s, %(queue)s, %(eta)s, %(id)s, %(tag)s)
+          INSERT INTO pull_queue_tasks_index (app, queue, eta, id, tag)
+          VALUES (%(app)s, %(queue)s, %(eta)s, %(id)s, %(tag)s)
     """, retry_policy=BASIC_RETRIES)
     parameters = {
       'app': self.app,
@@ -329,9 +329,9 @@ class PullQueue(Queue):
     self.db_access.session.execute(insert_eta_index, parameters)
 
     insert_tag_index = SimpleStatement("""
-          INSERT INTO pull_queue_tags_index (app, queue, tag, eta, id)
-          VALUES (%(app)s, %(queue)s, %(tag)s, %(eta)s, %(id)s)
-        """, retry_policy=BASIC_RETRIES)
+      INSERT INTO pull_queue_tags_index (app, queue, tag, eta, id)
+      VALUES (%(app)s, %(queue)s, %(tag)s, %(eta)s, %(id)s)
+    """, retry_policy=BASIC_RETRIES)
     self.db_access.session.execute(insert_tag_index, parameters)
 
     logger.debug('Added task: {}'.format(task))
@@ -521,8 +521,9 @@ class PullQueue(Queue):
                                 .format(self.MAX_LEASE_TIME))
 
     start_time = datetime.datetime.utcnow()
-    logger.debug('Leasing {} tasks for {} sec. group_by_tag={}, tag={}'.
-                 format(num_tasks, lease_seconds, group_by_tag, tag))
+    logger.debug('Leasing {} tasks for {} sec. queue={}, group_by_tag={}, '
+                 'tag={}'.format(num_tasks, lease_seconds, self.name,
+                                 group_by_tag, tag))
     # If not specified, the tag is assumed to be that of the oldest task.
     if group_by_tag and tag is None:
       try:
@@ -557,7 +558,7 @@ class PullQueue(Queue):
       # Determine new_eta when the first index_results are received
       if new_eta is None:
         new_eta = current_time_ms() + datetime.timedelta(seconds=lease_seconds)
-        
+
       lease_results = self._lease_batch(index_results, new_eta)
       for index_num, index_result in enumerate(index_results):
         task = lease_results[index_num]
@@ -770,18 +771,18 @@ class PullQueue(Queue):
         'Encountered error while updating lease: {}. Retrying.'.format(error))
       return self._update_lease(parameters, retries_left,
                                 check_lease=check_lease)
-
+    
     success_message = 'Task {} updated. New ETA: {}'.format(
       parameters['id'], parameters['new_eta'])
     if result.was_applied:
-      logger.debug(success_message)
+      logger.debug(success_message)   
       return
 
     if not self._task_mutated_by_id(parameters['id'], parameters['op_id']):
       select_statement = SimpleStatement("""
-              SELECT lease_expires FROM pull_queue_tasks
-              WHERE app = %(app)s AND queue = %(queue)s AND id = %(id)s
-            """, consistency_level=ConsistencyLevel.SERIAL)
+        SELECT lease_expires FROM pull_queue_tasks
+        WHERE app = %(app)s AND queue = %(queue)s AND id = %(id)s
+      """, consistency_level=ConsistencyLevel.SERIAL)
       parameters = {
         'app': self.app,
         'queue': self.name,
@@ -794,10 +795,10 @@ class PullQueue(Queue):
 
       logger.debug(
         'Lease already expired on task: {} '
-        '(lease_expires = {})'.format(parameters['id'], result.lease_expires))
+        '(lease_expires = {})'.format(parameters['id'], result.lease_expires))      
 
       raise InvalidLeaseRequest('The task lease has expired.')
-
+   
     logger.debug(success_message)
 
   def _query_index(self, num_tasks, group_by_tag, tag):
@@ -829,6 +830,7 @@ class PullQueue(Queue):
         LIMIT {limit}
       """.format(limit=num_tasks)
       parameters = {'app': self.app, 'queue': self.name}
+      logger.info('params: {}'.format(parameters))
       results = self.db_access.session.execute(query_tasks, parameters)
     return results
 
@@ -1074,9 +1076,9 @@ class PullQueue(Queue):
       tag = ''
 
     statement = """
-          INSERT INTO pull_queue_tasks_index (app, queue, eta, id, tag)
-          VALUES (?, ?, ?, ?, ?)
-        """
+      INSERT INTO pull_queue_tasks_index (app, queue, eta, id, tag)
+      VALUES (?, ?, ?, ?, ?)
+    """
     if statement not in self.prepared_statements:
       self.prepared_statements[statement] = session.prepare(statement)
     create_new_eta_index = self.prepared_statements[statement]
@@ -1085,9 +1087,9 @@ class PullQueue(Queue):
     update_index.add(create_new_eta_index, parameters)
 
     statement = """
-          INSERT INTO pull_queue_tags_index (app, queue, tag, eta, id)
-          VALUES (?, ?, ?, ?, ?)
-        """
+      INSERT INTO pull_queue_tags_index (app, queue, tag, eta, id)
+      VALUES (?, ?, ?, ?, ?)
+    """
     if statement not in self.prepared_statements:
       self.prepared_statements[statement] = session.prepare(statement)
     create_new_tag_index = self.prepared_statements[statement]
@@ -1117,13 +1119,13 @@ class PullQueue(Queue):
     self.db_access.session.execute(delete_eta_index, parameters)
 
     delete_tag_index = """
-          DELETE FROM pull_queue_tags_index
-          WHERE app = %(app)s
-          AND queue = %(queue)s
-          AND tag = %(tag)s
-          AND eta = %(eta)s
-          AND id = %(id)s
-        """
+      DELETE FROM pull_queue_tags_index
+      WHERE app = %(app)s
+      AND queue = %(queue)s
+      AND tag = %(tag)s
+      AND eta = %(eta)s
+      AND id = %(id)s
+    """
     parameters = {'app': self.app, 'queue': self.name, 'tag': tag, 'eta': eta,
                   'id': task_id}
     self.db_access.session.execute(delete_tag_index, parameters)
@@ -1171,13 +1173,13 @@ class PullQueue(Queue):
       tag = ''
 
     delete_task_tag_index = SimpleStatement("""
-          DELETE FROM pull_queue_tags_index
-          WHERE app = %(app)s
-          AND queue = %(queue)s
-          AND tag = %(tag)s
-          AND eta = %(eta)s
-          AND id = %(id)s
-        """)
+      DELETE FROM pull_queue_tags_index
+      WHERE app = %(app)s
+      AND queue = %(queue)s
+      AND tag = %(tag)s
+      AND eta = %(eta)s
+      AND id = %(id)s
+    """)
     parameters = {
       'app': self.app,
       'queue': self.name,
