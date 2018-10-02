@@ -207,7 +207,7 @@ class AppRegistry(object):
   def iterpages(self):
     for alf in self.iter():
       for endTime, position in alf.iterpages():
-         yield endTime, position, alf
+        yield endTime, position, alf
 
   def registerFollower(self, protocol, query):
     self._followers[protocol] = query
@@ -249,8 +249,9 @@ class Protocol(protocol.Protocol):
       return False
     action = self.buf[0]
     if not self.app_id and action != 'a': # First command should set_app_id
-      log.err("Received unknown action %s", action)
+      log.err("Received unknown action {}".format(action))
       self.transport.loseConnection()
+      self.buf = ''
       return False
     query_length, = struct.unpack('I', self.buf[1:5])
     query_end = query_length + 5;
@@ -261,8 +262,9 @@ class Protocol(protocol.Protocol):
     if processor:
       processor(self, query)
     else:
-      log.err("Received unknown action %s", action)
+      log.err("Received unknown action {}".format(action))
       self.transport.loseConnection()
+      self.buf = ''
       return False
     self.buf = self.buf[query_end:]
     return True
@@ -375,9 +377,9 @@ class Protocol(protocol.Protocol):
 
 
 class LogServerFactory(protocol.Factory):
-    protocol = Protocol
+  protocol = Protocol
 
-    def __init__(self, path, size):
-        self.path = path
-        self.size = size
-        self.apps = dict()
+  def __init__(self, path, size):
+    self.path = path
+    self.size = size
+    self.apps = dict()
