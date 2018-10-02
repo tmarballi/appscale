@@ -601,7 +601,7 @@ class Module(object):
           environ['PATH_INFO'])
       environ['REQUEST_ID_HASH'] = self.generate_request_id_hash()
       if should_log_request:
-        environ['REQUEST_LOG_ID'] = self.generate_request_log_id()
+        environ['REQUEST_LOG_ID'] = request_id
         if 'HTTP_HOST' in environ:
           hostname = environ['HTTP_HOST']
         elif environ['SERVER_PORT'] == '80':
