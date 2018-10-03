@@ -16,6 +16,10 @@ else
     exit 1
 fi
 
+while fuser /var/cache/apt/archives/lock /var/lib/apt/lists/lock /var/lib/dpkg/lock ; do
+  echo "Waiting for apt lock"
+  sleep 60
+done
 
 if ! systemctl | grep -q filebeat; then
     echo "Installing Filebeat..."
