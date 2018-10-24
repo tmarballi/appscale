@@ -159,6 +159,7 @@ class DatastoreRestore(object):
 
   def get_restore_lock(self):
     """ Tries to acquire the lock for a datastore restore.
+    
     Returns:
       True on success, False otherwise.
     """
@@ -166,6 +167,7 @@ class DatastoreRestore(object):
 
   def read_from_file_and_restore(self, backup_file):
     """ Reads entities from backup file and stores them in the datastore.
+    
     Args:
       backup_file: A str, the backup file location to restore from.
     """
