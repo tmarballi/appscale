@@ -159,7 +159,7 @@ def setup_logrotate(app_name, log_size):
   notifempty
   copytruncate
 }}
-""".format(log_prefix=log_prefix, size=log_size)
+""".format(log_prefix=log_prefix, size=log_size, app_prefix=app_name)
   logging.debug("Logrotate file: {} - Contents:\n{}".
     format(app_logrotate_script, contents))
 
