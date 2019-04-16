@@ -348,6 +348,7 @@ class Protocol(protocol.Protocol):
 
   def sendQueryResult(self, records):
     log.msg("Sending {} Result(s)".format(len(records)))
+    records = [record for record in records if record is not None]
     stream = StringIO()
     stream.write(struct.pack('I', len(records)))
     for record in records:
