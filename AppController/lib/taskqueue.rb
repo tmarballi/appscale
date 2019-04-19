@@ -62,7 +62,10 @@ module TaskQueue
   OPTIONAL_FEATURES = ['celery_gui']
 
   # TaskQueue server processes per core.
-  MULTIPLIER = 2
+  MULTIPLIER = 3
+
+  # The amount of memory in MB that a taskqueue server can use.
+  MAX_MEMORY = 150
 
   # If we fail to get the number of processors we set our default number of
   # taskqueue servers to this value.
@@ -224,7 +227,7 @@ module TaskQueue
     start_cmd = TASKQUEUE_SERVER_SCRIPT
     start_cmd << ' --verbose' if verbose
     env_vars = { PATH: '$PATH:/usr/local/bin' }
-    MonitInterface.start(:taskqueue, start_cmd, ports, env_vars)
+    MonitInterface.start(:taskqueue, start_cmd, ports, env_vars, MAX_MEMORY)
     Djinn.log_debug('Done starting taskqueue servers on this node')
   end
 

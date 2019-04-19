@@ -22,5 +22,5 @@ module DatastoreServer
   MAXCONN = 2
 
   # Datastore server processes to core multiplier.
-  MULTIPLIER = 1
+  MULTIPLIER = 2
 end
