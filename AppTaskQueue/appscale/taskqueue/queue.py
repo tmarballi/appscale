@@ -424,6 +424,7 @@ class PostgresPullQueue(Queue):
             'task_name': task.id,
           }
         )
+    logger.debug('Deleted task: {}'.format(task))
 
   @retry_pg_connection
   def update_lease(self, task, new_lease_seconds):
@@ -627,6 +628,7 @@ class PostgresPullQueue(Queue):
     time_elapsed = datetime.datetime.utcnow() - start_time
     logger.debug('Leased {} tasks [time elapsed: {}]'
                  .format(len(leased), str(time_elapsed)))
+    logger.debug('IDs leased: {}'.format([task.id for task in leased]))
     return leased
 
   @retry_pg_connection

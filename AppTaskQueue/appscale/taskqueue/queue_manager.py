@@ -1,6 +1,7 @@
 """ Keeps track of queue configuration details for producer connections. """
 
 import json
+import random
 
 from kazoo.exceptions import ZookeeperError, NoNodeError
 from tornado.ioloop import IOLoop, PeriodicCallback
@@ -15,7 +16,7 @@ from .utils import logger
 class ProjectQueueManager(dict):
   """ Keeps track of queue configuration details for a single project. """
 
-  FLUSH_DELETED_INTERVAL = 3 * 60 * 60  # 3h
+  FLUSH_DELETED_INTERVAL = 2 * 60 * 60  # 2h
   MAX_POSTGRES_BACKED_PROJECTS = 20
 
   def __init__(self, zk_client, db_access, project_id):
@@ -40,7 +41,8 @@ class ProjectQueueManager(dict):
       # TODO: PostgresConnectionWrapper may need an update when
       #       TaskQueue becomes concurrent
       self.pg_connection_wrapper = (
-        pg_connection_wrapper.PostgresConnectionWrapper(dsn=pg_dsn[0])
+        pg_connection_wrapper.PostgresConnectionWrapper(
+          dsn=pg_dsn[0], connect_timeout=10, options='-c statement_timeout=10000')
       )
       self._configure_periodical_flush()
     except NoNodeError:
@@ -153,7 +155,15 @@ class ProjectQueueManager(dict):
       for q in postgres_pull_queues:
         q.flush_deleted()
 
-    PeriodicCallback(flush_deleted, self.FLUSH_DELETED_INTERVAL * 1000).start()
+    def schedule_flush():
+      # Approximately 49 of 50 calls should be skipped
+      if random.random() < 0.02:
+        main_io_loop = IOLoop.instance()
+        # Schedule flushing with random delay (0-120 minutes)
+        delay = random.random() * self.FLUSH_DELETED_INTERVAL
+        main_io_loop.call_later(delay, flush_deleted)
+
+    PeriodicCallback(schedule_flush, self.FLUSH_DELETED_INTERVAL * 1000).start()
 
 
 class GlobalQueueManager(dict):
