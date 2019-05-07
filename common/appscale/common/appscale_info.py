@@ -10,8 +10,6 @@ import yaml
 from . import constants
 from . import file_io
 
-logger = logging.getLogger(__name__)
-
 
 def read_file_contents(path):
   """ Reads the contents of the given file.
@@ -174,16 +172,16 @@ def get_zk_locations_string():
       return ','.join('{}:2181'.format(line.strip())
                       for line in locations_file if line.strip())
   except IOError as io_error:
-    logger.exception(io_error)
+    logging.exception(io_error)
     return constants.ZK_DEFAULT_CONNECTION_STR
   except ValueError as value_error:
-    logger.exception(value_error)
+    logging.exception(value_error)
     return constants.ZK_DEFAULT_CONNECTION_STR
   except TypeError as type_error:
-    logger.exception(type_error)
+    logging.exception(type_error)
     return constants.ZK_DEFAULT_CONNECTION_STR
   except KeyError as key_error:
-    logger.exception(key_error)
+    logging.exception(key_error)
     return constants.ZK_DEFAULT_CONNECTION_STR
 
 def get_zk_node_ips():
@@ -197,16 +195,16 @@ def get_zk_node_ips():
     with open(constants.ZK_LOCATIONS_FILE) as locations_file:
       return [line.strip() for line in locations_file if line.strip()]
   except IOError as io_error:
-    logger.exception(io_error)
+    logging.exception(io_error)
     return []
   except ValueError as value_error:
-    logger.exception(value_error)
+    loging.exception(value_error)
     return []
   except TypeError as type_error:
-    logger.exception(type_error)
+    logging.exception(type_error)
     return []
   except KeyError as key_error:
-    logger.exception(key_error)
+    logging.exception(key_error)
     return []
 
 def get_db_master_ip():
@@ -250,5 +248,5 @@ def get_search_location():
   try:
     return file_io.read(constants.SEARCH_FILE_LOC).rstrip()
   except IOError:
-    logger.warning("Search role is not configured.")
+    logging.warning("Search role is not configured.")
     return ""
