@@ -26,7 +26,7 @@ from google.appengine.datastore import sortable_pb_encoder
 
 
 logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('appscale-datastore')
 
 
 def clean_app_id(app_id):

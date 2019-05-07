@@ -18,7 +18,7 @@ from .entity_lock import zk_group_path
 from ..dbconstants import BadRequest
 from ..dbconstants import InternalError
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('appscale-datastore')
 
 # Nodes that indicate a cross-group transaction start with this string.
 XG_PREFIX = 'xg'
