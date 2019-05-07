@@ -23,15 +23,19 @@ from ..cassandra_env import cassandra_interface
 from ..cassandra_env.cassandra_interface import NODE_TOOL
 from ..cassandra_env.cassandra_interface import CASSANDRA_MONIT_WATCH_NAME
 
-logger = logging.getLogger(__name__)
+sys.path.append(INFRASTRUCTURE_MANAGER_DIR)
+from utils import utils
+from utils.utils import ExitCodes
+from utils.utils import MonitStates
+
 
 def clear_old_snapshots():
   """ Remove any old snapshots to minimize disk space usage locally. """
-  logger.info('Removing old Cassandra snapshots...')
+  logging.info('Removing old Cassandra snapshots...')
   try:
     subprocess.check_call([NODE_TOOL, 'clearsnapshot'])
   except CalledProcessError as error:
-    logger.error('Error while deleting old Cassandra snapshots. Error: {0}'.\
+    logging.error('Error while deleting old Cassandra snapshots. Error: {0}'.\
       format(str(error)))
 
 
@@ -43,11 +47,11 @@ def create_snapshot(snapshot_name=''):
   Returns:
     True on success, False otherwise.
   """
-  logger.info('Creating new Cassandra snapshots...')
+  logging.info('Creating new Cassandra snapshots...')
   try:
     subprocess.check_call([NODE_TOOL, 'snapshot'])
   except CalledProcessError as error:
-    logger.error('Error while creating new Cassandra snapshots. Error: {0}'.\
+    logging.error('Error while creating new Cassandra snapshots. Error: {0}'.\
       format(str(error)))
     return False
   return True
@@ -58,13 +62,13 @@ def remove_old_data():
   for directory in CASSANDRA_DATA_SUBDIRS:
     data_dir = "{0}/{1}/{2}".format(APPSCALE_DATA_DIR, "cassandra",
       directory)
-    logger.warning("Removing data from {0}".format(data_dir))
+    logging.warning("Removing data from {0}".format(data_dir))
     try:
       subprocess.Popen('find /opt/appscale/cassandra -name "*" | '
         'grep ".db\|.txt\|.log" | grep -v snapshot | xargs rm', shell=True)
-      logger.info("Done removing data!")
+      logging.info("Done removing data!")
     except CalledProcessError as error:
-      logger.error("Error while removing old data from db. Overwriting... "
+      logging.error("Error while removing old data from db. Overwriting... "
         "Error: {0}".format(str(error)))
 
 
@@ -74,28 +78,28 @@ def restore_snapshots():
   Returns:
     True on success, False otherwise.
   """
-  logger.info("Restoring Cassandra snapshots.")
+  logging.info("Restoring Cassandra snapshots.")
 
   for directory in CASSANDRA_DATA_SUBDIRS:
     data_dir = "{0}/{1}/{2}/".format(APPSCALE_DATA_DIR, "cassandra",
       directory)
-    logger.debug("Restoring in dir {0}".format(data_dir))
+    logging.debug("Restoring in dir {0}".format(data_dir))
     for path, _, filenames in os.walk(data_dir):
       for filename in filenames:
-        logger.debug("Restoring: {0}".format(filename))
+        logging.debug("Restoring: {0}".format(filename))
         if not filename:
-          logger.warn("skipping...")
+          logging.warn("skipping...")
           continue
         full_path = "{0}/{1}".format(path, filename)
         new_full_path = "{0}/../../{1}".format(path, filename)
-        logger.debug("{0} -> {1}".format(full_path, new_full_path))
+        logging.debug("{0} -> {1}".format(full_path, new_full_path))
         # Move the files up into the data directory.
         if not backup_recovery_helper.rename(full_path, new_full_path):
-          logger.error("Error while moving Cassandra snapshot in place. "
+          logging.error("Error while moving Cassandra snapshot in place. "
             "Aborting restore...")
           return False
 
-  logger.info("Done restoring Cassandra snapshots.")
+  logging.info("Done restoring Cassandra snapshots.")
   return True
 
 
@@ -105,10 +109,10 @@ def shutdown_datastore():
   Returns:
     True on success, False otherwise.
   """
-  logger.info("Shutting down Cassandra.")
+  logging.info("Shutting down Cassandra.")
   monit_interface.stop(
     cassandra_interface.CASSANDRA_MONIT_WATCH_NAME, is_group=False)
-  logger.warning("Done!")
+  logging.warning("Done!")
   return True
 
 
@@ -123,7 +127,7 @@ def backup_data(path, keyname):
     BRException if unable to find any Cassandra machines or if DB machine has
       insufficient space.
   """
-  logger.info("Starting new db backup.")
+  logging.info("Starting new db backup.")
 
   db_ips = appscale_info.get_db_ips()
   if not db_ips:
@@ -156,7 +160,7 @@ def backup_data(path, keyname):
     appscale_utils.ssh(db_ip, keyname,
                        'cd {} && {}'.format(cassandra_dir, create_tar))
 
-  logger.info("Done with db backup.")
+  logging.info("Done with db backup.")
 
 
 def restore_data(path, keyname, force=False):
@@ -170,7 +174,7 @@ def restore_data(path, keyname, force=False):
     BRException if unable to find any Cassandra machines or if DB machine has
       insufficient space.
   """
-  logger.info("Starting new db restore.")
+  logging.info("Starting new db restore.")
 
   db_ips = appscale_info.get_db_ips()
   if not db_ips:
@@ -184,14 +188,14 @@ def restore_data(path, keyname, force=False):
       machines_without_restore.append(db_ip)
 
   if machines_without_restore and not force:
-    logger.info('The following machines do not have a restore file: {}'.
+    logging.info('The following machines do not have a restore file: {}'.
       format(machines_without_restore))
     response = raw_input('Would you like to continue? [y/N] ')
     if response not in ['Y', 'y']:
       return
 
   for db_ip in db_ips:
-    logger.info('Stopping Cassandra on {}'.format(db_ip))
+    logging.info('Stopping Cassandra on {}'.format(db_ip))
     summary = appscale_utils.ssh(db_ip, keyname, 'monit summary',
                                  method=subprocess.check_output)
     status = utils.monit_status(summary, CASSANDRA_MONIT_WATCH_NAME)
@@ -211,7 +215,7 @@ def restore_data(path, keyname, force=False):
 
   cassandra_dir = '{}/cassandra'.format(APPSCALE_DATA_DIR)
   for db_ip in db_ips:
-    logger.info('Restoring Cassandra data on {}'.format(db_ip))
+    logging.info('Restoring Cassandra data on {}'.format(db_ip))
     clear_db = 'find {0} -regex ".*\.\(db\|txt\|log\)$" -exec rm {{}} \;'.\
       format(cassandra_dir)
     appscale_utils.ssh(db_ip, keyname, clear_db)
@@ -222,7 +226,7 @@ def restore_data(path, keyname, force=False):
       appscale_utils.ssh(db_ip, keyname,
                          'chown -R cassandra {}'.format(cassandra_dir))
 
-    logger.info('Starting Cassandra on {}'.format(db_ip))
+    logging.info('Starting Cassandra on {}'.format(db_ip))
     retries = SERVICE_RETRIES
     status = utils.MonitStates.UNMONITORED
     while status != utils.MonitStates.RUNNING:
@@ -242,7 +246,7 @@ def restore_data(path, keyname, force=False):
       db_ip, keyname,
       'appscale-start-service {}'.format(CASSANDRA_MONIT_WATCH_NAME))
 
-  logger.info('Waiting for Cassandra cluster to be ready')
+  logging.info('Waiting for Cassandra cluster to be ready')
   db_ip = db_ips[0]
   deadline = time.time() + SCHEMA_CHANGE_TIMEOUT
   while True:
@@ -262,9 +266,9 @@ def restore_data(path, keyname, force=False):
       break
 
     if time.time() > deadline:
-      logger.warning('Cassandra cluster still not ready.')
+      logging.warning('Cassandra cluster still not ready.')
       break
 
     time.sleep(3)
 
-  logger.info("Done with db restore.")
+  logging.info("Done with db restore.")

@@ -11,8 +11,6 @@ from ..zkappscale import zktransaction as zk
 # The location to look at in order to verify that an app is deployed.
 _SOURCE_LOCATION = '/opt/appscale/apps/'
 
-logger = logging.getLogger(__name__)
-
 
 def init_parser():
   """ Initializes the command line argument parser.
@@ -46,13 +44,13 @@ def main():
     level = logging.DEBUG
   logging.basicConfig(format='%(asctime)s %(levelname)s %(filename)s:' \
     '%(lineno)s %(message)s ', level=level)
-  logger.info("Logging started")
+  logging.info("Logging started")
 
   message = "Backing up "
   if args.source_code:
     message += "source and "
   message += "data for: {0}".format(args.app_id)
-  logger.info(message)
+  logging.info(message)
 
   zk_connection_locations = appscale_info.get_zk_locations_string()
   zookeeper = zk.ZKTransaction(host=zk_connection_locations)
@@ -62,7 +60,7 @@ def main():
   skip_list = args.skip
   if not skip_list:
     skip_list = []
-  logger.info("Will skip the following kinds: {0}".format(sorted(skip_list)))
+  logging.info("Will skip the following kinds: {0}".format(sorted(skip_list)))
   ds_backup = DatastoreBackup(args.app_id, zookeeper, table,
     source_code=args.source_code, skip_list=sorted(skip_list))
   try:

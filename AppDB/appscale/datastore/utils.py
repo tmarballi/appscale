@@ -204,7 +204,7 @@ def fetch_and_delete_entities(database, table, schema, first_key,
 
   last_key = first_key + '\0' + TERMINATING_STRING
 
-  logger.debug("Deleting application data in the range: {0} - {1}".
+  logging.debug("Deleting application data in the range: {0} - {1}".
     format(first_key, last_key))
 
   db = DatastoreFactory.getDatastore(database)
@@ -214,7 +214,7 @@ def fetch_and_delete_entities(database, table, schema, first_key,
     return
 
   # Loop through the datastore tables and delete data.
-  logger.info("Deleting data from {0}".format(table))
+  logging.info("Deleting data from {0}".format(table))
 
   start_inclusive = True
   while True:
@@ -223,17 +223,17 @@ def fetch_and_delete_entities(database, table, schema, first_key,
         table, schema, first_key, last_key, batch_size,
         start_inclusive=start_inclusive)
       if not entities:
-        logger.info("No entities found for {}".format(table))
+        logging.info("No entities found for {}".format(table))
         break
 
       for ii in entities:
         db.batch_delete_sync(table, ii.keys())
-      logger.info("Deleted {0} entities".format(len(entities)))
+      logging.info("Deleted {0} entities".format(len(entities)))
 
       first_key = entities[-1].keys()[0]
       start_inclusive = False
     except AppScaleDBConnectionError:
-      logger.exception('Error while deleting data')
+      logging.exception('Error while deleting data')
       time.sleep(backoff_timeout)
 
 

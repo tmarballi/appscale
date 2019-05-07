@@ -34,8 +34,6 @@ from google.net.proto.ProtocolBuffer import ProtocolBufferDecodeError
 # A policy that does not retry statements.
 NO_RETRIES = FallthroughRetryPolicy()
 
-logger = logging.getLogger(__name__)
-
 
 def define_ua_schema(session):
   """ Populate the schema table for the UAServer.
@@ -76,7 +74,7 @@ def create_batch_tables(cluster, session):
         columns['transaction'].cql_type != 'bigint'):
       session.execute('DROP TABLE batches', timeout=SCHEMA_CHANGE_TIMEOUT)
 
-  logger.info('Trying to create batches')
+  logging.info('Trying to create batches')
   create_table = """
     CREATE TABLE IF NOT EXISTS batches (
       app text,
@@ -93,7 +91,7 @@ def create_batch_tables(cluster, session):
   try:
     session.execute(statement, timeout=SCHEMA_CHANGE_TIMEOUT)
   except cassandra.OperationTimedOut:
-    logger.warning(
+    logging.warning(
       'Encountered an operation timeout while creating batches table. '
       'Waiting {} seconds for schema to settle.'.format(SCHEMA_CHANGE_TIMEOUT))
     time.sleep(SCHEMA_CHANGE_TIMEOUT)
@@ -103,7 +101,7 @@ def create_batch_tables(cluster, session):
       'txid_hash' not in keyspace_metadata.tables['batch_status'].columns):
     session.execute('DROP TABLE batch_status', timeout=SCHEMA_CHANGE_TIMEOUT)
 
-  logger.info('Trying to create batch_status')
+  logging.info('Trying to create batch_status')
   create_table = """
     CREATE TABLE IF NOT EXISTS batch_status (
       txid_hash blob PRIMARY KEY,
@@ -115,7 +113,7 @@ def create_batch_tables(cluster, session):
   try:
     session.execute(statement, timeout=SCHEMA_CHANGE_TIMEOUT)
   except cassandra.OperationTimedOut:
-    logger.warning(
+    logging.warning(
       'Encountered an operation timeout while creating batch_status table. '
       'Waiting {} seconds for schema to settle.'.format(SCHEMA_CHANGE_TIMEOUT))
     time.sleep(SCHEMA_CHANGE_TIMEOUT)
@@ -133,7 +131,7 @@ def create_groups_table(session):
   try:
     session.execute(statement, timeout=SCHEMA_CHANGE_TIMEOUT)
   except cassandra.OperationTimedOut:
-    logger.warning(
+    logging.warning(
       'Encountered an operation timeout while creating group_updates table. '
       'Waiting {} seconds for schema to settle.'.format(SCHEMA_CHANGE_TIMEOUT))
     time.sleep(SCHEMA_CHANGE_TIMEOUT)
@@ -164,7 +162,7 @@ def create_transactions_table(session):
   try:
     session.execute(statement, timeout=SCHEMA_CHANGE_TIMEOUT)
   except cassandra.OperationTimedOut:
-    logger.warning(
+    logging.warning(
       'Encountered an operation timeout while creating transactions table. '
       'Waiting {} seconds for schema to settle.'.format(SCHEMA_CHANGE_TIMEOUT))
     time.sleep(SCHEMA_CHANGE_TIMEOUT)
@@ -185,7 +183,7 @@ def create_entity_ids_table(session):
   try:
     session.execute(statement, timeout=SCHEMA_CHANGE_TIMEOUT)
   except cassandra.OperationTimedOut:
-    logger.warning(
+    logging.warning(
       'Encountered an operation timeout while creating entity_ids table. '
       'Waiting {} seconds for schema to settle.'.format(SCHEMA_CHANGE_TIMEOUT))
     time.sleep(SCHEMA_CHANGE_TIMEOUT)
@@ -298,11 +296,11 @@ def prime_cassandra(replication):
                   timeout=SCHEMA_CHANGE_TIMEOUT)
   session.set_keyspace(KEYSPACE)
 
-  logger.info('Waiting for all hosts to be connected')
+  logging.info('Waiting for all hosts to be connected')
   deadline = time.time() + SCHEMA_CHANGE_TIMEOUT
   while True:
     if time.time() > deadline:
-      logger.warning('Timeout when waiting for hosts to join. Continuing '
+      logging.warning('Timeout when waiting for hosts to join. Continuing '
                       'with connected hosts.')
       break
 
@@ -325,11 +323,11 @@ def prime_cassandra(replication):
                value=ThriftColumn.VALUE)
     statement = SimpleStatement(create_table, retry_policy=NO_RETRIES)
 
-    logger.info('Trying to create {}'.format(table))
+    logging.info('Trying to create {}'.format(table))
     try:
       session.execute(statement, timeout=SCHEMA_CHANGE_TIMEOUT)
     except cassandra.OperationTimedOut:
-      logger.warning(
+      logging.warning(
         'Encountered an operation timeout while creating {} table. Waiting {} '
         'seconds for schema to settle.'.format(table, SCHEMA_CHANGE_TIMEOUT))
       time.sleep(SCHEMA_CHANGE_TIMEOUT)
@@ -394,7 +392,7 @@ def prime_cassandra(replication):
                 'column': cassandra_interface.PRIMED_KEY,
                 'value': bytearray(str(CURRENT_VERSION))}
   session.execute(metadata_insert, parameters)
-  logger.info('Cassandra is primed.')
+  logging.info('Cassandra is primed.')
 
 
 def primed():

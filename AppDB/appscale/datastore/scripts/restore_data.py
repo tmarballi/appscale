@@ -22,8 +22,6 @@ from ..zkappscale import zktransaction as zk
 # Where to look to verify the app is deployed.
 _APPS_LOCATION = '/var/apps/'
 
-logger = logging.getLogger(__name__)
-
 
 def init_parser():
   """ Initializes the command line argument parser.
@@ -59,8 +57,8 @@ def app_is_deployed(app_id, zk_client):
     True on success, False otherwise.
   """
   if not zk_client.exists('/appscale/projects/{}'.format(app_id)):
-    logger.error("Seems that \"{0}\" is not deployed.".format(app_id))
-    logger.info("Please deploy \"{0}\" and try again.".\
+    logging.error("Seems that \"{0}\" is not deployed.".format(app_id))
+    logging.info("Please deploy \"{0}\" and try again.".\
       format(app_id))
     return False
   return True
@@ -76,8 +74,8 @@ def backup_dir_exists(backup_dir):
     True on success, False otherwise.
   """
   if not os.path.exists(backup_dir):
-    logger.error("Error while accessing backup files.")
-    logger.info("Please provide a valid backup directory.")
+    logging.error("Error while accessing backup files.")
+    logging.info("Please provide a valid backup directory.")
     return False
   return True
 
@@ -95,9 +93,9 @@ def main():
     level = logging.DEBUG
   logging.basicConfig(format='%(asctime)s %(levelname)s %(filename)s:' \
     '%(lineno)s %(message)s ', level=level)
-  logger.info("Logging started")
+  logging.info("Logging started")
 
-  logger.info(args)
+  logging.info(args)
 
   zk_connection_locations = appscale_info.get_zk_locations_string()
   zookeeper = zk.ZKTransaction(host=zk_connection_locations)
@@ -113,7 +111,7 @@ def main():
   if args.clear_datastore:
     message = "Deleting \"{0}\" data...".\
       format(args.app_id, args.backup_dir)
-    logger.info(message)
+    logging.info(message)
     try:
       tables_to_clear = {
         APP_ENTITY_TABLE: APP_ENTITY_SCHEMA,
@@ -125,7 +123,7 @@ def main():
       for table, schema in tables_to_clear.items():
         fetch_and_delete_entities('cassandra', table, schema, args.app_id, False)
     except Exception as exception:
-      logger.error("Unhandled exception while deleting \"{0}\" data: {1} " \
+      logging.error("Unhandled exception while deleting \"{0}\" data: {1} " \
         "Exiting...".format(args.app_id, exception.message))
       return
 

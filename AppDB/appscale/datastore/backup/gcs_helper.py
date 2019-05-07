@@ -18,8 +18,6 @@ APPS_GCS_PREFIX = 'apps/'
 # The upload request timeout in seconds (12 hours).
 REQUEST_TIMEOUT = 12*60*60
 
-logger = logging.getLogger(__name__)
-
 
 def upload_to_bucket(full_object_name, local_path):
   """ Uploads a file to GCS.
@@ -33,14 +31,14 @@ def upload_to_bucket(full_object_name, local_path):
   """
   # Ensure local file is accessible.
   if not backup_recovery_helper.does_file_exist(local_path):
-    logger.error("Local file '{0}' doesn't exist. Aborting upload to "
+    logging.error("Local file '{0}' doesn't exist. Aborting upload to "
       "GCS.".format(local_path))
     return False
 
   # Extract bucket and object name for GCS.
   bucket_name, object_name = extract_gcs_tokens(full_object_name)
   if bucket_name == '' or object_name == '':
-    logger.error("Full GCS object name is invalid. Aborting upload to "
+    logging.error("Full GCS object name is invalid. Aborting upload to "
       "GCS.".format(local_path))
     return False
 
@@ -50,14 +48,14 @@ def upload_to_bucket(full_object_name, local_path):
   try:
     response = gcs_post_request(url)
     location = response.headers['Location']
-    logger.debug("Response Header Location (aka /upload URL): {0}".
+    logging.debug("Response Header Location (aka /upload URL): {0}".
       format(location))
   except requests.HTTPError as error:
-    logger.error("HTTPError on getting GCS session ID. Error: {0}".
+    logging.error("HTTPError on getting GCS session ID. Error: {0}".
       format(error))
     return False
   except KeyError as key_error:
-    logger.error("KeyError on getting GCS session ID. Error: {0}.".
+    logging.error("KeyError on getting GCS session ID. Error: {0}.".
       format(key_error))
     return False
 
@@ -65,12 +63,12 @@ def upload_to_bucket(full_object_name, local_path):
   new_url = location
   try:
     response = gcs_put_request(new_url, local_path)
-    logger.debug("Final GCS response: {0}".format(str(response)))
+    logging.debug("Final GCS response: {0}".format(str(response)))
   except requests.HTTPError as error:
-    logger.error("Error on initial GCS upload".format(error))
+    logging.error("Error on initial GCS upload".format(error))
     return False
 
-  logger.info("Successfully uploaded '{0}' to GCS. "
+  logging.info("Successfully uploaded '{0}' to GCS. "
     "GCS object name is '{1}'.".format(local_path, full_object_name))
   return True
 
@@ -87,7 +85,7 @@ def download_from_bucket(full_object_name, local_path):
   # Extract bucket and object name for GCS.
   bucket_name, object_name = extract_gcs_tokens(full_object_name)
   if bucket_name == '' or object_name == '':
-    logger.error("Full GCS object name is invalid. Aborting download from "
+    logging.error("Full GCS object name is invalid. Aborting download from "
       "GCS.".format(local_path))
     return False
 
@@ -97,14 +95,14 @@ def download_from_bucket(full_object_name, local_path):
   try:
     response = gcs_get_request(url)
     if response.status_code != HTTP_OK:
-      logger.error("Error on retrieving GCS file metadata. Status code: {0}".
+      logging.error("Error on retrieving GCS file metadata. Status code: {0}".
         format(response.status_code))
       return False
 
     content = json.loads(response.content)
-    logger.debug("GCS object metadata received: {0}".format(str(response)))
+    logging.debug("GCS object metadata received: {0}".format(str(response)))
   except requests.HTTPError as error:
-    logger.error("Error on retrieving GCS file metadata. Error: {0}".
+    logging.error("Error on retrieving GCS file metadata. Error: {0}".
       format(error))
     return False
 
@@ -114,20 +112,20 @@ def download_from_bucket(full_object_name, local_path):
 
   # Compare to GCS file size.
   if int(content['size']) >= bytes_available:
-    logger.error('Not enough space to download a backup.')
+    logging.error('Not enough space to download a backup.')
     return False
 
   # Invoke 'curl' to retrieve the resource and store to local_path.
   try:
-    logger.debug("Downloading GCS object: curl -o {0} {1}".format(
+    logging.debug("Downloading GCS object: curl -o {0} {1}".format(
       local_path, content['mediaLink']))
     subprocess.check_output(['curl', '-o', local_path, content['mediaLink']])
   except subprocess.CalledProcessError as called_process_error:
-    logger.error("Error while downloading file from GCS. Error: {0}".
+    logging.error("Error while downloading file from GCS. Error: {0}".
       format(called_process_error))
     return False
 
-  logger.info("Successfully downloaded '{0}' from GCS. "
+  logging.info("Successfully downloaded '{0}' from GCS. "
     "Local file name is '{1}'.".format(full_object_name, local_path))
   return True
 
@@ -145,7 +143,7 @@ def extract_gcs_tokens(full_object_name):
 
   tokens = full_object_name.split('/')
   if len(tokens) < 3:
-    logger.error("Malformed GCS path '{0}'. Aborting GCS operation.".format(
+    logging.error("Malformed GCS path '{0}'. Aborting GCS operation.".format(
       full_object_name))
     return bucket_name, object_name
 
@@ -206,13 +204,13 @@ def list_bucket(bucket_name):
   try:
     response = gcs_get_request(url)
     if response.status_code != HTTP_OK:
-      logger.error("Error on listing objects in GCS bucket: {0}. "
+      logging.error("Error on listing objects in GCS bucket: {0}. "
         "Error: {1}".format(bucket_name, response.status_code))
       return []
 
     content = json.loads(response.content)
   except requests.HTTPError as error:
-    logger.error("Error on listing objects in GCS bucket: {0}. Error: {1}".
+    logging.error("Error on listing objects in GCS bucket: {0}. Error: {1}".
       format(bucket_name, error))
     return []
 
@@ -223,5 +221,5 @@ def list_bucket(bucket_name):
   for item in content['items']:
     objects.append(item['name'])
 
-  logger.debug("Bucket contents: {0}".format(objects))
+  logging.debug("Bucket contents: {0}".format(objects))
   return objects

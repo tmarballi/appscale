@@ -15,8 +15,6 @@ BATCH_SIZE = 100
 # The number of seconds to wait before logging progress.
 LOGGING_INTERVAL = 5
 
-logger = logging.getLogger(__name__)
-
 
 def copy_column(session, table, key_column, old_column, new_column):
   """ Copies values from one column to another.
@@ -41,7 +39,7 @@ def copy_column(session, table, key_column, old_column, new_column):
     VALUES (?, ?)
   """.format(table=table, key=key_column, new_column=new_column))
 
-  logger.info('Populating {}.{}'.format(table, new_column))
+  logging.info('Populating {}.{}'.format(table, new_column))
   start_row = ''
   last_logged = time.time()
   total_copied = 0
@@ -62,11 +60,11 @@ def copy_column(session, table, key_column, old_column, new_column):
       total_copied += 1
 
     if time.time() > last_logged + LOGGING_INTERVAL:
-      logger.info('Copied {} rows'.format(total_copied))
+      logging.info('Copied {} rows'.format(total_copied))
 
     start_row = last_row
 
-  logger.info('Copied {} rows'.format(total_copied))
+  logging.info('Copied {} rows'.format(total_copied))
 
 
 def main():
@@ -89,26 +87,26 @@ def main():
 
   if (column in columns and columns[column].cql_type == 'bigint' and
       temp_column not in columns):
-    logger.info('{}.{} is already the correct type'.format(table, column))
+    logging.info('{}.{} is already the correct type'.format(table, column))
     return
 
   if column in columns and columns[column].cql_type != 'bigint':
     if temp_column not in columns:
-      logger.info('Adding new column with correct type')
+      logging.info('Adding new column with correct type')
       statement = 'ALTER TABLE {} ADD {} int'.format(table, temp_column)
       session.execute(statement)
 
     copy_column(session, table, 'group', column, temp_column)
 
-    logger.info('Dropping {}.{}'.format(table, column))
+    logging.info('Dropping {}.{}'.format(table, column))
     session.execute('ALTER TABLE {} DROP {}'.format(table, column))
 
-    logger.info('Creating {}.{}'.format(table, column))
+    logging.info('Creating {}.{}'.format(table, column))
     session.execute('ALTER TABLE {} ADD {} bigint'.format(table, column))
 
   copy_column(session, table, key_column, temp_column, column)
 
-  logger.info('Dropping {}.{}'.format(table, temp_column))
+  logging.info('Dropping {}.{}'.format(table, temp_column))
   session.execute('ALTER TABLE {} DROP {}'.format(table, temp_column))
 
-  logger.info('Schema upgrade complete')
+  logging.info('Schema upgrade complete')

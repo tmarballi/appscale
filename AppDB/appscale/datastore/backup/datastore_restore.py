@@ -18,8 +18,6 @@ from appscale.datastore.zkappscale.transaction_manager import (
 from google.appengine.datastore import datastore_pb
 from google.appengine.datastore import entity_pb
 
-logger = logging.getLogger(__name__)
-
 
 class DatastoreRestore(multiprocessing.Process):
   """ Backs up all the entities for a set application ID. """
@@ -75,18 +73,18 @@ class DatastoreRestore(multiprocessing.Process):
       self.ds_distributed.dynamic_put)
 
     while True:
-      logger.debug("Trying to get restore lock.")
+      logging.debug("Trying to get restore lock.")
       if self.get_restore_lock():
-        logger.info("Got the restore lock.")
+        logging.info("Got the restore lock.")
         self.run_restore()
         try:
           self.zoo_keeper.release_lock_with_path(zk.DS_RESTORE_LOCK_PATH)
         except zk.ZKTransactionException, zk_exception:
-          logger.error("Unable to release zk lock {0}.".\
+          logging.error("Unable to release zk lock {0}.".\
             format(str(zk_exception)))
         break
       else:
-        logger.info("Did not get the restore lock. Another instance may be "
+        logging.info("Did not get the restore lock. Another instance may be "
           "running.")
         time.sleep(random.randint(1, self.LOCK_POLL_PERIOD))
 
@@ -106,7 +104,7 @@ class DatastoreRestore(multiprocessing.Process):
     Returns:
       True on success, False otherwise.
     """
-    logger.debug("Entity batch to process: {0}".format(entity_batch))
+    logging.debug("Entity batch to process: {0}".format(entity_batch))
 
     # Convert encoded entities to EntityProto objects, change the app ID if
     # it's different than the original and encode again.
@@ -119,7 +117,7 @@ class DatastoreRestore(multiprocessing.Process):
 
       ent_protos.append(ent_proto)
       new_entities_encoded.append(ent_proto.Encode())
-    logger.debug("Entities encoded: {0}".format(new_entities_encoded))
+    logging.debug("Entities encoded: {0}".format(new_entities_encoded))
 
     # Create a PutRequest with the entities to be stored.
     put_request = datastore_pb.PutRequest()
@@ -127,21 +125,21 @@ class DatastoreRestore(multiprocessing.Process):
     for entity in new_entities_encoded:
       new_entity = put_request.add_entity()
       new_entity.MergeFromString(entity)
-    logger.debug("Put request: {0}".format(put_request))
+    logging.debug("Put request: {0}".format(put_request))
 
     try:
       self.dynamic_put_sync(self.app_id, put_request, put_response)
       self.entities_restored += len(ent_protos)
     except zk.ZKInternalException, zkie:
-      logger.error("ZK internal exception for app id {0}, " \
+      logging.error("ZK internal exception for app id {0}, " \
         "info {1}".format(self.app_id, str(zkie)))
       return False
     except zk.ZKTransactionException, zkte:
-      logger.error("Concurrent transaction exception for app id {0}, " \
+      logging.error("Concurrent transaction exception for app id {0}, " \
         "info {1}".format(self.app_id, str(zkte)))
       return False
     except InternalError:
-      logger.exception('Unable to write entity')
+      logging.exception('Unable to write entity')
       return False
 
     return True
@@ -161,7 +159,7 @@ class DatastoreRestore(multiprocessing.Process):
 
           # If batch size is met, store entities.
           if len(entities_to_store) == self.BATCH_SIZE:
-            logger.info("Storing a batch of {0} entities...".
+            logging.info("Storing a batch of {0} entities...".
               format(len(entities_to_store)))
             self.store_entity_batch(entities_to_store)
             entities_to_store = []
@@ -169,23 +167,23 @@ class DatastoreRestore(multiprocessing.Process):
           break
 
     if entities_to_store:
-      logger.info("Storing {0} entities...".format(len(entities_to_store)))
+      logging.info("Storing {0} entities...".format(len(entities_to_store)))
       self.store_entity_batch(entities_to_store)
 
   def run_restore(self):
     """ Runs the restore process. Reads the backup file and stores entities
     in batches.
     """
-    logger.info("Restore started")
+    logging.info("Restore started")
     start = time.time()
 
     for backup_file in glob.glob('{0}/*{1}'.
         format(self.backup_dir, DatastoreBackup.BACKUP_FILE_SUFFIX)):
       if backup_file.endswith(".backup"):
-        logger.info("Restoring \"{0}\" data from: {1}".\
+        logging.info("Restoring \"{0}\" data from: {1}".\
           format(self.app_id, backup_file))
         self.read_from_file_and_restore(backup_file)
 
     time_taken = time.time() - start
-    logger.info("Restored {0} entities".format(self.entities_restored))
-    logger.info("Restore took {0} seconds".format(str(time_taken)))
+    logging.info("Restored {0} entities".format(self.entities_restored))
+    logging.info("Restore took {0} seconds".format(str(time_taken)))
