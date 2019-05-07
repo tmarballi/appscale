@@ -14,8 +14,6 @@ from appscale.hermes.converter import (
   stats_to_dict, IncludeLists, WrongIncludeLists
 )
 
-logger = logging.getLogger(__name__)
-
 
 class CurrentStatsHandler(RequestHandler):
   """ Handler for getting current local stats of specific kind.
@@ -44,7 +42,7 @@ class CurrentStatsHandler(RequestHandler):
   @gen.coroutine
   def get(self):
     if self.request.headers.get(SECRET_HEADER) != options.secret:
-      logger.warn("Received bad secret from {client}"
+      logging.warn("Received bad secret from {client}"
                    .format(client=self.request.remote_ip))
       self.set_status(HTTP_Codes.HTTP_DENIED, "Bad secret")
       return
@@ -59,7 +57,7 @@ class CurrentStatsHandler(RequestHandler):
       try:
         include_lists = IncludeLists(include_lists)
       except WrongIncludeLists as err:
-        logger.warn("Bad request from {client} ({error})"
+        logging.warn("Bad request from {client} ({error})"
                      .format(client=self.request.remote_ip, error=err))
         json.dump({'error': str(err)}, self)
         self.set_status(HTTP_Codes.HTTP_BAD_REQUEST, 'Wrong include_lists')
@@ -75,7 +73,7 @@ class CurrentStatsHandler(RequestHandler):
       acceptable_time = now - max_age
       if self._cached_snapshot.utc_timestamp >= acceptable_time:
         snapshot = self._cached_snapshot
-        logger.info("Returning cached snapshot with age {:.2f}s"
+        logging.info("Returning cached snapshot with age {:.2f}s"
                      .format(now-self._cached_snapshot.utc_timestamp))
 
     if not snapshot:
@@ -106,7 +104,7 @@ class CurrentClusterStatsHandler(RequestHandler):
   @gen.coroutine
   def get(self):
     if self.request.headers.get(SECRET_HEADER) != options.secret:
-      logger.warn("Received bad secret from {client}"
+      logging.warn("Received bad secret from {client}"
                    .format(client=self.request.remote_ip))
       self.set_status(HTTP_Codes.HTTP_DENIED, "Bad secret")
       return
@@ -121,7 +119,7 @@ class CurrentClusterStatsHandler(RequestHandler):
       try:
         include_lists = IncludeLists(include_lists)
       except WrongIncludeLists as err:
-        logger.warn("Bad request from {client} ({error})"
+        logging.warn("Bad request from {client} ({error})"
                      .format(client=self.request.remote_ip, error=err))
         json.dump({'error': str(err)}, self)
         self.set_status(HTTP_Codes.HTTP_BAD_REQUEST, 'Wrong include_lists')
@@ -140,7 +138,7 @@ class CurrentClusterStatsHandler(RequestHandler):
         if max_age and snapshot.utc_timestamp > newer_than
       }
       if fresh_local_snapshots:
-        logger.debug("Returning cluster stats with {} cached snapshots"
+        logging.debug("Returning cluster stats with {} cached snapshots"
                       .format(len(fresh_local_snapshots)))
     else:
       fresh_local_snapshots = {}

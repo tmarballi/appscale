@@ -12,8 +12,6 @@ from appscale.hermes.converter import Meta, include_list_name
 # The endpoint used for retrieving queue stats.
 NODETOOL_STATUS_COMMAND = ['/opt/cassandra/cassandra/bin/nodetool', 'status']
 
-logger = logging.getLogger(__name__)
-
 
 class NodetoolStatusError(Exception):
   """ Indicates that `nodetool status` command failed. """
@@ -108,7 +106,7 @@ class CassandraStatsSource(object):
       status = yield proc.stdout.read_until_close()
       err = yield proc.stderr.read_until_close()
       if err:
-        logger.error(err)
+        logging.error(err)
     except process.CalledProcessError as err:
       raise NodetoolStatusError(err)
 
@@ -175,6 +173,6 @@ class CassandraStatsSource(object):
       missing_nodes=list(known_db_nodes - shown_nodes),
       unknown_nodes=list(shown_nodes - known_db_nodes)
     )
-    logger.info('Prepared Cassandra nodes status in '
+    logging.info('Prepared Cassandra nodes status in '
                  '{elapsed:.1f}s.'.format(elapsed=time.time()-start))
     raise gen.Return(snapshot)

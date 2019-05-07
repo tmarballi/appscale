@@ -17,7 +17,6 @@ from tornado.options import options
 from appscale.hermes import constants
 from appscale.hermes import stats_app
 
-logger = logging.getLogger(__name__)
 
 # A KazooClient for detecting configuration changes.
 zk_client = None
@@ -25,14 +24,14 @@ zk_client = None
 
 def signal_handler(signal, frame):
   """ Signal handler for graceful shutdown. """
-  logger.warning("Caught signal: {0}".format(signal))
+  logging.warning("Caught signal: {0}".format(signal))
   zk_client.stop()
   IOLoop.instance().add_callback(shutdown)
 
 
 def shutdown():
   """ Shuts down the server. """
-  logger.warning("Hermes is shutting down.")
+  logging.warning("Hermes is shutting down.")
   IOLoop.instance().stop()
 
 
@@ -78,6 +77,6 @@ def main():
   # Start loop for accepting http requests.
   IOLoop.instance().start()
 
-  logger.info("Hermes is up and listening on port: {}."
+  logging.info("Hermes is up and listening on port: {}."
                .format(constants.HERMES_PORT))
 

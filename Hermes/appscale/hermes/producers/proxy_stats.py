@@ -20,8 +20,6 @@ from appscale.hermes.constants import (
 from appscale.hermes.converter import include_list_name, Meta
 from appscale.hermes.unified_service_names import find_service_by_pxname
 
-logger = logging.getLogger(__name__)
-
 
 class BoundIpPortNotFound(Exception):
   pass
@@ -309,7 +307,7 @@ def get_stats_from_one_haproxy(socket_path, configs_dir):
   if ProxiesStatsSource.first_run:
     missed = ALL_HAPROXY_FIELDS - set(table.fieldnames)
     if missed:
-      logger.warn("HAProxy stats fields {} are missed. Old version of HAProxy "
+      logging.warn("HAProxy stats fields {} are missed. Old version of HAProxy "
                    "is probably used (v1.5+ is expected)".format(list(missed)))
     ProxiesStatsSource.first_run = False
 
@@ -406,7 +404,7 @@ class ProxiesStatsSource(object):
 
     proxy_stats_list = []
     for haproxy_process_name, info in HAPROXY_PROCESSES.iteritems():
-      logger.debug("Processing {} haproxy stats".format(haproxy_process_name))
+      logging.debug("Processing {} haproxy stats".format(haproxy_process_name))
       proxy_stats_list += get_stats_from_one_haproxy(
         info['socket'], info['configs'])
 
@@ -414,7 +412,7 @@ class ProxiesStatsSource(object):
       utc_timestamp=time.mktime(datetime.now().timetuple()),
       proxies_stats=proxy_stats_list
     )
-    logger.info("Prepared stats about {prox} proxies in {elapsed:.1f}s."
+    logging.info("Prepared stats about {prox} proxies in {elapsed:.1f}s."
                  .format(prox=len(proxy_stats_list), elapsed=time.time()-start))
     return stats
 

@@ -21,8 +21,6 @@ from appscale.hermes.producers import (
   taskqueue_stats, cassandra_stats
 )
 
-logger = logging.getLogger(__name__)
-
 # Allow tornado to fetch up to 100 concurrent requests
 httpclient.AsyncHTTPClient.configure(SimpleAsyncHTTPClient, max_clients=100)
 
@@ -75,7 +73,7 @@ class ClusterStatsSource(object):
       for ip, snapshot_or_err in stats_or_error_per_node.iteritems()
       if isinstance(snapshot_or_err, (str, unicode))
     }
-    logger.info("Fetched {stats} from {nodes} nodes in {elapsed:.1f}s."
+    logging.info("Fetched {stats} from {nodes} nodes in {elapsed:.1f}s."
                  .format(stats=self.stats_model.__name__,
                          nodes=len(stats_per_node),
                          elapsed=time.time() - start))
@@ -90,7 +88,7 @@ class ClusterStatsSource(object):
           snapshot = yield snapshot
       except Exception as err:
         snapshot = unicode(err)
-        logger.exception(
+        logging.exception(
           u"Failed to prepare local stats: {err}".format(err=err))
     else:
       snapshot = yield self._fetch_remote_stats_async(
@@ -123,7 +121,7 @@ class ClusterStatsSource(object):
       msg = u"Failed to get stats from {url} ({err})".format(url=url, err=err)
       if hasattr(err, 'response') and err.response and err.response.body:
         msg += u"\nBODY: {body}".format(body=err.response.body)
-      logger.error(msg)
+      logging.error(msg)
       raise gen.Return(unicode(err))
 
     try:

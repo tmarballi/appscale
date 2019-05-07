@@ -24,8 +24,6 @@ NODES_API = '/api/nodes'
 # The endpoint used for retrieving queue stats.
 QUEUES_API = '/api/queues'
 
-logger = logging.getLogger(__name__)
-
 
 class APICallFailed(Exception):
   """ Indicates that a RabbitMQ API call failed. """
@@ -96,7 +94,7 @@ class RabbitMQStatsSource(object):
       name=node_info['name'],
       partitions=node_info['partitions']
     )
-    logger.info('Prepared RabbitMQ node stats in '
+    logging.info('Prepared RabbitMQ node stats in '
                 '{elapsed:.1f}s.'.format(elapsed=time.time()-start))
     raise gen.Return(snapshot)
 
@@ -138,6 +136,6 @@ class PushQueueStatsSource(object):
       utc_timestamp=int(time.time()),
       queues=queue_stats
     )
-    logger.info('Prepared push queue stats in '
+    logging.info('Prepared push queue stats in '
                 '{elapsed:.1f}s.'.format(elapsed=time.time()-start))
     raise gen.Return(snapshot)
