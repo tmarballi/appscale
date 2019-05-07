@@ -291,7 +291,7 @@ def main():
                       help='Output debug-level logging')
   args = parser.parse_args()
   if args.verbose:
-    logging.getLogger('appscale').setLevel(logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
 
   # Configure zookeeper and db access
   zk_client = KazooClient(

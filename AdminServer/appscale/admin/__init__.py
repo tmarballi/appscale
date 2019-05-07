@@ -1320,7 +1320,7 @@ def main():
     return
 
   if args.verbose:
-    logging.getLogger('appscale').setLevel(logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
 
   options.define('secret', appscale_info.get_secret())
   options.define('login_ip', appscale_info.get_login_ip())
