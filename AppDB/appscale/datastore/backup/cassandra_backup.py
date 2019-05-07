@@ -23,11 +23,6 @@ from ..cassandra_env import cassandra_interface
 from ..cassandra_env.cassandra_interface import NODE_TOOL
 from ..cassandra_env.cassandra_interface import CASSANDRA_MONIT_WATCH_NAME
 
-sys.path.append(INFRASTRUCTURE_MANAGER_DIR)
-from utils import utils
-from utils.utils import ExitCodes
-from utils.utils import MonitStates
-
 
 def clear_old_snapshots():
   """ Remove any old snapshots to minimize disk space usage locally. """
