@@ -34,7 +34,7 @@ from appscale.common.constants import (
 from appscale.common.monit_interface import DEFAULT_RETRIES, ProcessNotFound
 from appscale.common.retrying import retry
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('appscale-instance-manager')
 
 
 def clean_up_instances(entries_to_keep):
@@ -67,7 +67,7 @@ def clean_up_instances(entries_to_keep):
   if not to_stop:
     return
 
-  logger.info('Killing {} unmonitored instances'.format(len(to_stop)))
+  logging.info('Killing {} unmonitored instances'.format(len(to_stop)))
   for process in to_stop:
     group = os.getpgid(process.pid)
     os.killpg(group, signal.SIGKILL)
@@ -207,8 +207,8 @@ class InstanceManager(object):
       raise BadConfigurationException(
         'Unknown runtime {} for {}'.format(runtime, version.project_id))
 
-    logger.info("Start command: " + str(start_cmd))
-    logger.info("Environment variables: " + str(env_vars))
+    logging.info("Start command: " + str(start_cmd))
+    logging.info("Environment variables: " + str(env_vars))
 
     monit_app_configuration.create_config_file(
       watch,
@@ -247,7 +247,7 @@ class InstanceManager(object):
       log_size = APP_LOG_SIZE
 
     if not setup_logrotate(version.project_id, log_size):
-      logger.error("Error while setting up log rotation for application: {}".
+      logging.error("Error while setting up log rotation for application: {}".
                     format(version.project_id))
 
   @gen.coroutine
@@ -268,7 +268,7 @@ class InstanceManager(object):
 
   def _recover_state(self):
     """ Establishes current state from Monit entries. """
-    logger.info('Getting current state')
+    logging.info('Getting current state')
     monit_entries = self._monit_operator.get_entries_sync()
     instance_entries = {entry: state for entry, state in monit_entries.items()
                         if entry.startswith(MONIT_INSTANCE_PREFIX)}
@@ -388,7 +388,7 @@ class InstanceManager(object):
         opener = urllib2.build_opener(NoRedirection)
         response = opener.open(url, timeout=HEALTH_CHECK_TIMEOUT)
         if response.code != HTTPCodes.OK:
-          logger.warning('{} returned {}. Headers: {}'.
+          logging.warning('{} returned {}. Headers: {}'.
                           format(url, response.code, response.headers.headers))
         raise gen.Return(True)
       except IOError:
@@ -396,7 +396,7 @@ class InstanceManager(object):
 
       yield gen.sleep(BACKOFF_TIME)
 
-    logger.error('Application did not come up on {} after {} seconds'.
+    logging.error('Application did not come up on {} after {} seconds'.
                   format(url, START_APP_TIMEOUT))
     raise gen.Return(False)
 
@@ -407,12 +407,12 @@ class InstanceManager(object):
     Args:
       instance: An Instance.
     """
-    logger.info('Waiting for {}'.format(instance))
+    logging.info('Waiting for {}'.format(instance))
     start_successful = yield self._wait_for_app(instance.port)
     if not start_successful:
       # In case the AppServer fails we let the AppController to detect it
       # and remove it if it still show in monit.
-      logger.warning('{} did not come up in time'.format(instance))
+      logging.warning('{} did not come up in time'.format(instance))
       return
 
     self._routing_client.register_instance(instance)
@@ -469,7 +469,7 @@ class InstanceManager(object):
     try:
       self._running_instances.remove(instance)
     except KeyError:
-      logger.info(
+      logging.info(
         'unregister_instance: non-existent instance {}'.format(instance))
 
     yield self._unmonitor_and_terminate(monit_watch)

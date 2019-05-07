@@ -13,7 +13,7 @@ from appscale.common import appscale_info
 from appscale.common.constants import GAE_PREFIX, VERSION_PATH_SEPARATOR
 from appscale.hermes.constants import HERMES_PORT
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('appscale-instance-manager')
 
 
 class RoutingClient(object):

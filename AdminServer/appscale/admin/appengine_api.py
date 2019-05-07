@@ -18,7 +18,7 @@ from .constants import CustomHTTPError
 from .utils import cron_from_dict
 from .utils import queues_from_dict
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('appscale-admin')
 
 
 class UpdateIndexesHandler(BaseHandler):

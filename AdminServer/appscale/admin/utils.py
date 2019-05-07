@@ -28,7 +28,7 @@ from .constants import (
 from .instance_manager.utils import copy_modified_jars
 from .instance_manager.utils import remove_conflicting_jars
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('appscale-admin')
 
 
 def assert_fields_in_resource(required_fields, resource_name, resource):

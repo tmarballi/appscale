@@ -74,7 +74,7 @@ from .routing.routing_manager import RoutingManager
 from .service_manager import ServiceManager, ServiceManagerHandler
 from .summary import get_combined_services
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('appscale-admin')
 
 # The state of each operation.
 operations = OperationsCache()
@@ -794,7 +794,7 @@ class VersionsHandler(BaseHandler):
     operations[operation.id] = operation
 
     pre_wait = REDEPLOY_WAIT if version_exists else 0
-    logger.debug(
+    logging.debug(
       'Starting operation {} in {}s'.format(operation.id, pre_wait))
     IOLoop.current().call_later(pre_wait, wait_for_deploy, operation.id)
 

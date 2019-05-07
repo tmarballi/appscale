@@ -24,7 +24,7 @@ from appscale.common.constants import (ASSIGNMENTS_PATH, CGROUP_DIR, HTTPCodes,
 # The characters allowed in a service identifier (eg. datastore)
 SERVICE_ID_CHARS = '[a-z_]'
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('appscale-admin')
 
 
 class ServiceTypes(object):
