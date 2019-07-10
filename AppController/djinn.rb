@@ -3684,7 +3684,6 @@ class Djinn
 
   # Run a build on modified directories so that changes will take effect.
   def build_uncommitted_changes
-    status = `git -C #{APPSCALE_HOME} status`
     if @options['update'].nil?
       return
     end
@@ -3697,31 +3696,31 @@ class Djinn
       update_python_package("#{APPSCALE_HOME}/common",
                             '/opt/appscale_venvs/api_server/bin/pip')
     end
-    if update_dir.include?('AppControllerClient')
+    if update_dir.include?('app_controller')
       update_python_package("#{APPSCALE_HOME}/AppControllerClient")
     end
-    if update_dir.include?('AdminServer')
+    if update_dir.include?('admin_server')
       update_python_package("#{APPSCALE_HOME}/AdminServer")
     end
-    if update_dir.include?('AppTaskQueue')
+    if update_dir.include?('taskqueue')
       extras = TaskQueue::OPTIONAL_FEATURES.join(',')
       update_python_package("#{APPSCALE_HOME}/AppTaskQueue[#{extras}]")
     end
-    if update_dir.include?('AppDB')
+    if update_dir.include?('app_db')
       update_python_package("#{APPSCALE_HOME}/AppDB")
     end
-    if update_dir.include?('InfrastructureManager')
+    if update_dir.include?('iaas_manager')
       update_python_package("#{APPSCALE_HOME}/InfrastructureManager")
     end
-    if update_dir.include?('Hermes')
+    if update_dir.include?('hermes')
       update_python_package("#{APPSCALE_HOME}/Hermes")
     end
-    if update_dir.include?('APIServer')
+    if update_dir.include?('api_server')
       build_api_server
     end
 
     # Update Java AppServer
-    build_java_appserver if update_dir.include?('AppServer_Java')
+    build_java_appserver if update_dir.include?('appserver_java')
   end
 
   def configure_ejabberd_cert
