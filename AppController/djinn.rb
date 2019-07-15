@@ -3683,7 +3683,7 @@ class Djinn
 
   # Run a build on modified directories so that changes will take effect.
   def build_uncommitted_changes
-    if @options['update'].empty?
+    if @options['update'].nil?
       return
     end
 
