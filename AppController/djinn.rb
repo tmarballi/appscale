@@ -486,8 +486,7 @@ class Djinn
     'write_detailed_processes_stats_log' => [TrueClass, 'False', true],
     'write_detailed_proxies_stats_log' => [TrueClass, 'False', true],
     'zone' => [String, nil, true],
-    'update' => [TrueClass, 'False', false],
-    'update_dir' => [String, nil, false]
+    'update' => [String, nil, false]
   }.freeze
 
   # Template used for rsyslog configuration files.
@@ -3684,11 +3683,11 @@ class Djinn
 
   # Run a build on modified directories so that changes will take effect.
   def build_uncommitted_changes
-    if @options['update'].downcase == 'false'
+    if @options['update'].empty?
       return
     end
 
-    update_dir = @options['update_dir']
+    update_dir = @options['update']
 
     # Update Python packages across corresponding virtual environments
     if update_dir.include?('common')
